@@ -90,8 +90,8 @@ All steps are streamed to the client and persisted.
 User query:
 `Why is my pod crash-looping?`
 
-
 The system may:
+
 - Describe the pod
 - Fetch recent events
 - Retrieve recent container logs
@@ -113,9 +113,9 @@ The system may:
 ### Local Startup
 
 1. Create a local Kubernetes cluster:
-`./scripts/create-kind.sh`
+   `./scripts/create-kind.sh`
 2. Start the system:
-`docker compose up`
+   `docker compose up`
 
 3. Open the web UI and run a diagnostic query.
 
@@ -131,7 +131,6 @@ OpsCopilot is deployable to Kubernetes using Helm.
 
 Example:
 `helm install opscopilot ./charts/opscopilot -f values.yaml`
-
 
 ---
 
