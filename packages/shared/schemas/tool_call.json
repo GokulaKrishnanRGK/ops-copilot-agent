@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/tool_call.json",
+  "title": "ToolCall",
+  "type": "object",
+  "required": ["id", "agent_run_id", "tool_name", "args_json", "status", "latency_ms", "bytes_returned", "truncated", "created_at"],
+  "properties": {
+    "id": { "type": "string" },
+    "agent_run_id": { "type": "string" },
+    "tool_name": { "type": "string" },
+    "args_json": { "type": "object" },
+    "status": { "type": "string", "enum": ["success", "error", "timeout"] },
+    "latency_ms": { "type": "integer", "minimum": 0 },
+    "bytes_returned": { "type": "integer", "minimum": 0 },
+    "truncated": { "type": "boolean" },
+    "error_message": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

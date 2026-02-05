@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/configuration.json",
+  "title": "Configuration",
+  "type": "object",
+  "required": ["api", "tool_server", "llm_gateway", "rag", "persistence", "observability", "web"],
+  "properties": {
+    "api": {
+      "type": "object",
+      "required": ["host", "port", "limits", "budget", "tools_base_url", "tools_request_timeout_ms"],
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1 },
+        "limits": {
+          "type": "object",
+          "required": ["max_agent_steps", "max_tool_calls", "max_llm_calls", "max_execution_time_ms"],
+          "properties": {
+            "max_agent_steps": { "type": "integer", "minimum": 0 },
+            "max_tool_calls": { "type": "integer", "minimum": 0 },
+            "max_llm_calls": { "type": "integer", "minimum": 0 },
+            "max_execution_time_ms": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "budget": {
+          "type": "object",
+          "required": ["max_budget_usd", "warning_threshold_usd"],
+          "properties": {
+            "max_budget_usd": { "type": "number", "minimum": 0 },
+            "warning_threshold_usd": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "tools_base_url": { "type": "string" },
+        "tools_request_timeout_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "tool_server": {
+      "type": "object",
+      "required": ["k8s_allowed_namespaces", "tool_timeout_ms", "tool_max_output_bytes", "tool_max_log_lines"],
+      "properties": {
+        "k8s_allowed_namespaces": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tool_timeout_ms": { "type": "integer", "minimum": 0 },
+        "tool_max_output_bytes": { "type": "integer", "minimum": 0 },
+        "tool_max_log_lines": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "llm_gateway": {
+      "type": "object",
+      "required": ["provider", "bedrock_region", "bedrock_model_id", "request_timeout_ms", "max_retries", "max_tokens_default", "temperature_default", "cost_table_path", "cost_precision"],
+      "properties": {
+        "provider": { "type": "string" },
+        "bedrock_region": { "type": "string" },
+        "bedrock_model_id": { "type": "string" },
+        "request_timeout_ms": { "type": "integer", "minimum": 0 },
+        "max_retries": { "type": "integer", "minimum": 0 },
+        "max_tokens_default": { "type": "integer", "minimum": 0 },
+        "temperature_default": { "type": "number", "minimum": 0 },
+        "cost_table_path": { "type": "string" },
+        "cost_precision": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "rag": {
+      "type": "object",
+      "required": ["docs_path", "chunk_size", "chunk_overlap", "embedding_model_id", "embedding_dimensions", "top_k", "max_context_bytes"],
+      "properties": {
+        "docs_path": { "type": "string" },
+        "chunk_size": { "type": "integer", "minimum": 0 },
+        "chunk_overlap": { "type": "integer", "minimum": 0 },
+        "embedding_model_id": { "type": "string" },
+        "embedding_dimensions": { "type": "integer", "minimum": 0 },
+        "top_k": { "type": "integer", "minimum": 0 },
+        "max_context_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "persistence": {
+      "type": "object",
+      "required": ["database_url", "max_connections", "connection_timeout_ms"],
+      "properties": {
+        "database_url": { "type": "string" },
+        "max_connections": { "type": "integer", "minimum": 1 },
+        "connection_timeout_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "observability": {
+      "type": "object",
+      "required": ["service_name", "otlp_endpoint", "otlp_protocol", "traces_sampler", "traces_sampler_arg", "metrics_exporter", "log_level", "log_format"],
+      "properties": {
+        "service_name": { "type": "string" },
+        "otlp_endpoint": { "type": "string" },
+        "otlp_protocol": { "type": "string" },
+        "traces_sampler": { "type": "string" },
+        "traces_sampler_arg": { "type": "string" },
+        "metrics_exporter": { "type": "string" },
+        "log_level": { "type": "string" },
+        "log_format": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "web": {
+      "type": "object",
+      "required": ["api_base_url", "streaming_endpoint", "enable_streaming", "default_budget_usd"],
+      "properties": {
+        "api_base_url": { "type": "string" },
+        "streaming_endpoint": { "type": "string" },
+        "enable_streaming": { "type": "boolean" },
+        "default_budget_usd": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

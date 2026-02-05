@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/planner_output.json",
+  "title": "PlannerOutput",
+  "type": "object",
+  "required": ["goal", "steps", "stopping_criteria"],
+  "properties": {
+    "goal": { "type": "string" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool_name", "args"],
+        "properties": {
+          "tool_name": { "type": "string" },
+          "args": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "stopping_criteria": {
+      "type": "object",
+      "required": ["max_steps", "max_tool_calls", "max_time_ms"],
+      "properties": {
+        "max_steps": { "type": "integer", "minimum": 0 },
+        "max_tool_calls": { "type": "integer", "minimum": 0 },
+        "max_time_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

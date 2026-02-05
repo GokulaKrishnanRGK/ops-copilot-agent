@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/session.json",
+  "title": "Session",
+  "type": "object",
+  "required": ["id", "created_at", "updated_at"],
+  "properties": {
+    "id": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "title": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

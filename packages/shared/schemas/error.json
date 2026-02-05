@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/error.json",
+  "title": "Error",
+  "type": "object",
+  "required": ["error_type", "message"],
+  "properties": {
+    "error_type": { "type": "string" },
+    "message": { "type": "string" },
+    "context": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

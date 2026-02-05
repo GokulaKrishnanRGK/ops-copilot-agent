@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/tool_request.json",
+  "title": "ToolRequest",
+  "type": "object",
+  "required": ["tool_name", "args", "timeout_ms"],
+  "properties": {
+    "tool_name": { "type": "string" },
+    "args": { "type": "object" },
+    "timeout_ms": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

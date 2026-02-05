@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/llm_call.json",
+  "title": "LlmCall",
+  "type": "object",
+  "required": ["id", "agent_run_id", "agent_node", "model_id", "tokens_input", "tokens_output", "cost_usd", "latency_ms", "created_at"],
+  "properties": {
+    "id": { "type": "string" },
+    "agent_run_id": { "type": "string" },
+    "agent_node": { "type": "string" },
+    "model_id": { "type": "string" },
+    "tokens_input": { "type": "integer", "minimum": 0 },
+    "tokens_output": { "type": "integer", "minimum": 0 },
+    "cost_usd": { "type": "number", "minimum": 0 },
+    "latency_ms": { "type": "integer", "minimum": 0 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "metadata_json": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/tool_catalog.json",
+  "title": "ToolCatalog",
+  "type": "object",
+  "required": ["tools"],
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tool_definition" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tool_definition": {
+      "type": "object",
+      "required": ["name", "args", "result"],
+      "properties": {
+        "name": { "type": "string" },
+        "args": { "$ref": "#/$defs/tool_args" },
+        "result": { "$ref": "#/$defs/tool_result" }
+      },
+      "additionalProperties": false
+    },
+    "tool_args": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/list_pods_args" },
+        { "$ref": "#/$defs/describe_pod_args" },
+        { "$ref": "#/$defs/get_pod_events_args" },
+        { "$ref": "#/$defs/get_pod_logs_args" },
+        { "$ref": "#/$defs/describe_deployment_args" }
+      ]
+    },
+    "tool_result": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/list_pods_result" },
+        { "$ref": "#/$defs/describe_pod_result" },
+        { "$ref": "#/$defs/get_pod_events_result" },
+        { "$ref": "#/$defs/get_pod_logs_result" },
+        { "$ref": "#/$defs/describe_deployment_result" }
+      ]
+    },
+    "list_pods_args": {
+      "type": "object",
+      "required": ["tool_name", "namespace"],
+      "properties": {
+        "tool_name": { "const": "k8s.list_pods" },
+        "namespace": { "type": "string" },
+        "label_selector": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "describe_pod_args": {
+      "type": "object",
+      "required": ["tool_name", "namespace", "pod_name"],
+      "properties": {
+        "tool_name": { "const": "k8s.describe_pod" },
+        "namespace": { "type": "string" },
+        "pod_name": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "get_pod_events_args": {
+      "type": "object",
+      "required": ["tool_name", "namespace", "pod_name"],
+      "properties": {
+        "tool_name": { "const": "k8s.get_pod_events" },
+        "namespace": { "type": "string" },
+        "pod_name": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "get_pod_logs_args": {
+      "type": "object",
+      "required": ["tool_name", "namespace", "pod_name"],
+      "properties": {
+        "tool_name": { "const": "k8s.get_pod_logs" },
+        "namespace": { "type": "string" },
+        "pod_name": { "type": "string" },
+        "container": { "type": ["string", "null"] },
+        "tail_lines": { "type": ["integer", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "describe_deployment_args": {
+      "type": "object",
+      "required": ["tool_name", "namespace", "deployment_name"],
+      "properties": {
+        "tool_name": { "const": "k8s.describe_deployment" },
+        "namespace": { "type": "string" },
+        "deployment_name": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "list_pods_result": {
+      "type": "object",
+      "required": ["tool_name", "items"],
+      "properties": {
+        "tool_name": { "const": "k8s.list_pods" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "namespace", "status"],
+            "properties": {
+              "name": { "type": "string" },
+              "namespace": { "type": "string" },
+              "status": { "type": "string" },
+              "node": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "describe_pod_result": {
+      "type": "object",
+      "required": ["tool_name", "pod"],
+      "properties": {
+        "tool_name": { "const": "k8s.describe_pod" },
+        "pod": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "get_pod_events_result": {
+      "type": "object",
+      "required": ["tool_name", "events"],
+      "properties": {
+        "tool_name": { "const": "k8s.get_pod_events" },
+        "events": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "get_pod_logs_result": {
+      "type": "object",
+      "required": ["tool_name", "logs"],
+      "properties": {
+        "tool_name": { "const": "k8s.get_pod_logs" },
+        "logs": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "describe_deployment_result": {
+      "type": "object",
+      "required": ["tool_name", "deployment"],
+      "properties": {
+        "tool_name": { "const": "k8s.describe_deployment" },
+        "deployment": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

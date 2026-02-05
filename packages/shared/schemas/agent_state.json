@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/agent_state.json",
+  "title": "AgentState",
+  "type": "object",
+  "required": [
+    "session_id",
+    "agent_run_id",
+    "step",
+    "budgets",
+    "plan",
+    "tool_results",
+    "rag_context"
+  ],
+  "properties": {
+    "session_id": { "type": "string" },
+    "agent_run_id": { "type": "string" },
+    "step": { "type": "integer", "minimum": 0 },
+    "budgets": {
+      "type": "object",
+      "required": ["max_usd", "total_usd", "remaining_usd"],
+      "properties": {
+        "max_usd": { "type": "number", "minimum": 0 },
+        "total_usd": { "type": "number", "minimum": 0 },
+        "remaining_usd": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "plan": { "$ref": "planner_output.json" },
+    "tool_results": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "rag_context": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "chunk_id", "score", "content"],
+        "properties": {
+          "source": { "type": "string" },
+          "chunk_id": { "type": "string" },
+          "score": { "type": "number" },
+          "content": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
