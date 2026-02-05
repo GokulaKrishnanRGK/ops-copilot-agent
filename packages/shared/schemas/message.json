@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/message.json",
+  "title": "Message",
+  "type": "object",
+  "required": ["id", "session_id", "role", "content", "created_at"],
+  "properties": {
+    "id": { "type": "string" },
+    "session_id": { "type": "string" },
+    "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+    "content": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "metadata_json": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/tool_response.json",
+  "title": "ToolResponse",
+  "type": "object",
+  "required": ["tool_name", "status", "latency_ms", "result", "error"],
+  "properties": {
+    "tool_name": { "type": "string" },
+    "status": { "type": "string", "enum": ["success", "error", "timeout"] },
+    "latency_ms": { "type": "integer", "minimum": 0 },
+    "truncated": { "type": "boolean" },
+    "result": { "type": ["object", "null"] },
+    "error": {
+      "type": ["object", "null"],
+      "required": ["error_type", "message", "tool_name", "duration_ms"],
+      "properties": {
+        "error_type": {
+          "type": "string",
+          "enum": ["timeout", "not_found", "permission_denied", "invalid_input", "execution_error"]
+        },
+        "message": { "type": "string" },
+        "tool_name": { "type": "string" },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

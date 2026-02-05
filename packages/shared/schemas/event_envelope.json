@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/event_envelope.json",
+  "title": "EventEnvelope",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/session_started" },
+    { "$ref": "#/$defs/agent_run_started" },
+    { "$ref": "#/$defs/agent_node_started" },
+    { "$ref": "#/$defs/agent_node_completed" },
+    { "$ref": "#/$defs/planner_plan_generated" },
+    { "$ref": "#/$defs/tool_call_started" },
+    { "$ref": "#/$defs/tool_call_completed" },
+    { "$ref": "#/$defs/llm_call_started" },
+    { "$ref": "#/$defs/llm_call_completed" },
+    { "$ref": "#/$defs/rag_retrieval_completed" },
+    { "$ref": "#/$defs/budget_updated" },
+    { "$ref": "#/$defs/agent_run_failed" },
+    { "$ref": "#/$defs/agent_run_completed" },
+    { "$ref": "#/$defs/error_event" },
+    { "$ref": "#/$defs/assistant_token_delta" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["type", "timestamp", "session_id", "agent_run_id", "payload"],
+      "properties": {
+        "type": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "session_id": { "type": "string" },
+        "agent_run_id": { "type": "string" },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "session_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "session.started" },
+            "payload": {
+              "type": "object",
+              "required": ["session_id"],
+              "properties": {
+                "session_id": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "agent_run_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "agent_run.started" },
+            "payload": {
+              "type": "object",
+              "required": ["agent_run_id", "config"],
+              "properties": {
+                "agent_run_id": { "type": "string" },
+                "config": { "type": "object" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "agent_node_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "agent.node.started" },
+            "payload": {
+              "type": "object",
+              "required": ["node_name"],
+              "properties": {
+                "node_name": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "agent_node_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "agent.node.completed" },
+            "payload": {
+              "type": "object",
+              "required": ["node_name", "status"],
+              "properties": {
+                "node_name": { "type": "string" },
+                "status": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "planner_plan_generated": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "planner.plan.generated" },
+            "payload": {
+              "type": "object",
+              "required": ["plan_summary", "step_count"],
+              "properties": {
+                "plan_summary": { "type": "string" },
+                "step_count": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "tool_call_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "tool.call.started" },
+            "payload": {
+              "type": "object",
+              "required": ["tool_name", "args_summary", "timeout_ms"],
+              "properties": {
+                "tool_name": { "type": "string" },
+                "args_summary": { "type": "string" },
+                "timeout_ms": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "tool_call_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "tool.call.completed" },
+            "payload": {
+              "type": "object",
+              "required": ["tool_name", "status", "latency_ms", "truncated"],
+              "properties": {
+                "tool_name": { "type": "string" },
+                "status": { "type": "string" },
+                "latency_ms": { "type": "integer", "minimum": 0 },
+                "truncated": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "llm_call_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "llm.call.started" },
+            "payload": {
+              "type": "object",
+              "required": ["model_id", "agent_node"],
+              "properties": {
+                "model_id": { "type": "string" },
+                "agent_node": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "llm_call_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "llm.call.completed" },
+            "payload": {
+              "type": "object",
+              "required": ["model_id", "agent_node", "tokens_input", "tokens_output", "cost_usd", "latency_ms"],
+              "properties": {
+                "model_id": { "type": "string" },
+                "agent_node": { "type": "string" },
+                "tokens_input": { "type": "integer", "minimum": 0 },
+                "tokens_output": { "type": "integer", "minimum": 0 },
+                "cost_usd": { "type": "number", "minimum": 0 },
+                "latency_ms": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "rag_retrieval_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "rag.retrieval.completed" },
+            "payload": {
+              "type": "object",
+              "required": ["retrieved_chunks", "latency_ms"],
+              "properties": {
+                "retrieved_chunks": { "type": "integer", "minimum": 0 },
+                "latency_ms": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "budget_updated": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "budget.updated" },
+            "payload": {
+              "type": "object",
+              "required": ["delta_usd", "total_usd", "remaining_usd"],
+              "properties": {
+                "delta_usd": { "type": "number" },
+                "total_usd": { "type": "number" },
+                "remaining_usd": { "type": "number" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "agent_run_failed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "agent_run.failed" },
+            "payload": {
+              "type": "object",
+              "required": ["reason", "failure_type"],
+              "properties": {
+                "reason": { "type": "string" },
+                "failure_type": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "agent_run_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "agent_run.completed" },
+            "payload": {
+              "type": "object",
+              "required": ["summary"],
+              "properties": {
+                "summary": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "error_event": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "error" },
+            "payload": {
+              "type": "object",
+              "required": ["error_type", "message", "context"],
+              "properties": {
+                "error_type": { "type": "string" },
+                "message": { "type": "string" },
+                "context": { "type": "object" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "assistant_token_delta": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "assistant.token.delta" },
+            "payload": {
+              "type": "object",
+              "required": ["text"],
+              "properties": {
+                "text": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

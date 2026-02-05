@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/budget_event.json",
+  "title": "BudgetEvent",
+  "type": "object",
+  "required": ["id", "agent_run_id", "kind", "delta_usd", "total_usd", "created_at"],
+  "properties": {
+    "id": { "type": "string" },
+    "agent_run_id": { "type": "string" },
+    "kind": { "type": "string", "enum": ["llm_cost", "tool_cost", "enforcement"] },
+    "delta_usd": { "type": "number" },
+    "total_usd": { "type": "number" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "metadata_json": { "type": ["object", "null"] }
+  },
+  "additionalProperties": false
+}

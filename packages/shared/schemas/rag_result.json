@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/rag_result.json",
+  "title": "RagResult",
+  "type": "object",
+  "required": ["query", "results"],
+  "properties": {
+    "query": { "type": "string" },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "chunk_id", "score", "content"],
+        "properties": {
+          "source": { "type": "string" },
+          "chunk_id": { "type": "string" },
+          "score": { "type": "number" },
+          "content": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

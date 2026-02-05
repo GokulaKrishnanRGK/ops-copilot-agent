@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opscopilot.dev/schemas/agent_run.json",
+  "title": "AgentRun",
+  "type": "object",
+  "required": ["id", "session_id", "started_at", "status", "config_json"],
+  "properties": {
+    "id": { "type": "string" },
+    "session_id": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "ended_at": { "type": ["string", "null"], "format": "date-time" },
+    "status": { "type": "string", "enum": ["completed", "failed", "aborted"] },
+    "config_json": { "type": "object" }
+  },
+  "additionalProperties": false
+}
