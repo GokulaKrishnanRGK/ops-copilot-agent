@@ -9,10 +9,13 @@ test-web:
 test-api:
 	cd apps/api && pytest
 
+test-db:
+	cd packages/db && pytest
+
 test-tool:
 	cd apps/tool-server && go test ./...
 
-test: test-web test-api test-tool
+test: test-web test-api test-tool test-db
 
 lint:
 	cd apps/web && npm run lint

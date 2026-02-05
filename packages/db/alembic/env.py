@@ -1,0 +1,61 @@
+import os
+from logging.config import fileConfig
+from pathlib import Path
+
+from alembic import context
+from dotenv import load_dotenv
+from sqlalchemy import engine_from_config, pool
+
+from opscopilot_db.base import Base
+from opscopilot_db import models
+
+config = context.config
+fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+
+def _load_env():
+    repo_root = Path(__file__).resolve().parents[3]
+    load_dotenv(repo_root / ".env", override=False)
+
+
+def _get_url():
+    url = os.environ.get("DATABASE_URL")
+    if url:
+        return url
+    return config.get_main_option("sqlalchemy.url")
+
+
+def run_migrations_offline():
+    _load_env()
+    url = _get_url()
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online():
+    _load_env()
+    configuration = config.get_section(config.config_ini_section)
+    configuration["sqlalchemy.url"] = _get_url()
+    connectable = engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
