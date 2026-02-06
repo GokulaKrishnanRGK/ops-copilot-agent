@@ -65,3 +65,21 @@ class LlmResponse:
     latency_ms: int
     provider_metadata: dict[str, Any]
     error: LlmError | None
+
+
+@dataclass(frozen=True)
+class EmbeddingRequest:
+    model_id: str
+    texts: list[str]
+    idempotency_key: str
+    tags: LlmTags
+
+
+@dataclass(frozen=True)
+class EmbeddingResponse:
+    vectors: list[list[float]]
+    tokens_input: int
+    cost_usd: float
+    latency_ms: int
+    provider_metadata: dict[str, Any]
+    error: LlmError | None
