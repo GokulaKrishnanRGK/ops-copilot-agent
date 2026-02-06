@@ -1,0 +1,9 @@
+{
+  "models": [
+    {
+      "model_id": "text-embedding-3-small",
+      "input_per_1k": 0.00002,
+      "output_per_1k": 0.0
+    }
+  ]
+}
