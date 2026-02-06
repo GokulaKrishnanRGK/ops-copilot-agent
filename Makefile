@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool install install-web install-api install-tool
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools install install-web install-api install-tool
 
 build:
 	cd apps/web && npm run build
@@ -15,7 +15,13 @@ test-db:
 test-tool:
 	cd apps/tool-server && go test ./...
 
-test: test-web test-api test-tool test-db
+test-llm:
+	cd packages/llm-gateway && pytest
+
+test-tools:
+	cd packages/tools && pytest
+
+test: test-web test-api test-tool test-db test-llm test-tools
 
 lint:
 	cd apps/web && npm run lint
