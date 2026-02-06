@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools install install-web install-api install-tool
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag install install-web install-api install-tool install-llm install-rag opensearch-up opensearch-down
 
 build:
 	cd apps/web && npm run build
@@ -18,10 +18,13 @@ test-tool:
 test-llm:
 	cd packages/llm-gateway && pytest
 
+test-rag:
+	cd packages/rag && pytest
+
 test-tools:
 	cd packages/tools && pytest
 
-test: test-web test-api test-tool test-db test-llm test-tools
+test: test-web test-api test-tool test-db test-llm test-rag test-tools
 
 lint:
 	cd apps/web && npm run lint
@@ -43,4 +46,16 @@ install-api:
 install-tool:
 	cd apps/tool-server && go mod download
 
-install: install-web install-api install-tool
+install-llm:
+	cd packages/llm-gateway && pip install -e .
+
+install-rag:
+	cd packages/rag && pip install -e .
+
+install: install-web install-api install-tool install-llm install-rag
+
+opensearch-up:
+	docker compose --env-file .env -f deploy/compose/opensearch.yml up -d
+
+opensearch-down:
+	docker compose --env-file .env -f deploy/compose/opensearch.yml down
