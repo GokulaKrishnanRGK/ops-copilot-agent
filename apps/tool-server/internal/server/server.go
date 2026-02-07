@@ -14,7 +14,11 @@ func RegisterRoutes(mux *http.ServeMux) {
 		return
 	}
 	mux.HandleFunc("/health", healthHandler)
-	mux.HandleFunc("/tools/execute", toolExecuteHandler)
+	mux.Handle("/mcp", MCPHandler())
+}
+
+func encodeJSON(payload any) ([]byte, error) {
+	return json.Marshal(payload)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

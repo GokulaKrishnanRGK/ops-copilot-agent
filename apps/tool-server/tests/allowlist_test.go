@@ -4,21 +4,18 @@ import (
 	"testing"
 
 	"github.com/ops-copilot/tool-server/internal/k8s"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseAllowlist(t *testing.T) {
+	require := require.New(t)
 	allowed := k8s.ParseAllowlist("default, kube-system ,dev")
-	if len(allowed) != 3 {
-		t.Fatalf("expected 3, got %d", len(allowed))
-	}
-	if !k8s.IsAllowed(allowed, "default") {
-		t.Fatalf("default should be allowed")
-	}
+	require.Len(allowed, 3)
+	require.True(k8s.IsAllowed(allowed, "default"))
 }
 
 func TestAllowlistEmpty(t *testing.T) {
+	require := require.New(t)
 	allowed := k8s.ParseAllowlist("")
-	if k8s.IsAllowed(allowed, "default") {
-		t.Fatalf("empty allowlist should deny")
-	}
+	require.False(k8s.IsAllowed(allowed, "default"))
 }

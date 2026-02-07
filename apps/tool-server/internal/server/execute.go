@@ -2,40 +2,11 @@ package server
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 	"os"
 	"time"
 
 	"github.com/ops-copilot/tool-server/internal/k8s"
 )
-
-func toolExecuteHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	decoder := json.NewDecoder(r.Body)
-	var req toolRequest
-	if err := decoder.Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(toolResponse{
-			ToolName:  "",
-			Status:    "error",
-			LatencyMS: 0,
-			Truncated: false,
-			Result:    nil,
-			Error:     MapError("", "invalid_input", "invalid json"),
-		})
-		return
-	}
-	start := time.Now()
-	resp := executeTool(req)
-	resp.LatencyMS = int(time.Since(start).Milliseconds())
-	w.WriteHeader(statusForResponse(resp))
-	_ = json.NewEncoder(w).Encode(resp)
-}
 
 func executeTool(req toolRequest) toolResponse {
 	handler, ok := toolRegistry[req.ToolName]
@@ -115,11 +86,4 @@ func executeTool(req toolRequest) toolResponse {
 		Result:    truncated,
 		Error:     nil,
 	}
-}
-
-func statusForResponse(resp toolResponse) int {
-	if resp.Status == "success" {
-		return http.StatusOK
-	}
-	return StatusForError(resp.Error)
 }

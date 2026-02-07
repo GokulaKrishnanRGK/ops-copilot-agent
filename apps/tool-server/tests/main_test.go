@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -15,6 +16,13 @@ func TestMain(m *testing.M) {
 	}
 	exit := m.Run()
 	os.Exit(exit)
+}
+
+func TestRepoRoot(t *testing.T) {
+	require := require.New(t)
+	root, err := repoRoot()
+	require.NoError(err)
+	require.NotEmpty(root)
 }
 
 func repoRoot() (string, error) {

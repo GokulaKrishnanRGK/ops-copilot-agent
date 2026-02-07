@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	"github.com/ops-copilot/tool-server/internal/server"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStatusForError(t *testing.T) {
+	require := require.New(t)
 	cases := map[string]int{
 		"invalid_input":     400,
 		"permission_denied": 403,
@@ -16,8 +18,6 @@ func TestStatusForError(t *testing.T) {
 	}
 	for errType, expected := range cases {
 		err := server.MapError("tool", errType, "msg")
-		if server.StatusForError(err) != expected {
-			t.Fatalf("expected %d for %s", expected, errType)
-		}
+		require.Equal(expected, server.StatusForError(err))
 	}
 }
