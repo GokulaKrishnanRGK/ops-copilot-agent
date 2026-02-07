@@ -4,34 +4,27 @@ import (
 	"testing"
 
 	"github.com/ops-copilot/tool-server/internal/server"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRedactStrings(t *testing.T) {
+	require := require.New(t)
 	input := map[string]any{
 		"token":  "abc",
 		"nested": map[string]any{"password": "secret", "ok": "v"},
 	}
 	redacted := server.RedactStrings(input).(map[string]any)
-	if redacted["token"].(string) != "[REDACTED]" {
-		t.Fatalf("token not redacted")
-	}
+	require.Equal("[REDACTED]", redacted["token"].(string))
 	nested := redacted["nested"].(map[string]any)
-	if nested["password"].(string) != "[REDACTED]" {
-		t.Fatalf("password not redacted")
-	}
-	if nested["ok"].(string) != "v" {
-		t.Fatalf("value changed")
-	}
+	require.Equal("[REDACTED]", nested["password"].(string))
+	require.Equal("v", nested["ok"].(string))
 }
 
 func TestTruncateJSON(t *testing.T) {
+	require := require.New(t)
 	payload := map[string]any{"a": "b"}
 	truncated, did := server.TruncateJSON(payload, 5)
-	if !did {
-		t.Fatalf("expected truncation")
-	}
+	require.True(did)
 	result := truncated.(map[string]any)
-	if result["truncated"].(bool) != true {
-		t.Fatalf("truncated flag missing")
-	}
+	require.True(result["truncated"].(bool))
 }
