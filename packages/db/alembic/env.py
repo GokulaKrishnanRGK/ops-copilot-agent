@@ -1,9 +1,7 @@
 import os
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
-from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from opscopilot_db.base import Base
@@ -15,11 +13,6 @@ fileConfig(config.config_file_name)
 target_metadata = Base.metadata
 
 
-def _load_env():
-    repo_root = Path(__file__).resolve().parents[3]
-    load_dotenv(repo_root / ".env", override=False)
-
-
 def _get_url():
     url = os.environ.get("DATABASE_URL")
     if url:
@@ -28,7 +21,6 @@ def _get_url():
 
 
 def run_migrations_offline():
-    _load_env()
     url = _get_url()
     context.configure(
         url=url,
@@ -41,7 +33,6 @@ def run_migrations_offline():
 
 
 def run_migrations_online():
-    _load_env()
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = _get_url()
     connectable = engine_from_config(
