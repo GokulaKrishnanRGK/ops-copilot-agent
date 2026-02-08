@@ -1,0 +1,60 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf -u ${OPENSEARCH_USERNAME}:${OPENSEARCH_PASSWORD} https://localhost:9200 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      POSTGRES_DB: ${POSTGRES_DB:-opscopilot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-opscopilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  tool-server:
+    build:
+      context: ../../apps/tool-server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      TOOL_SERVER_ADDR: ":8080"
+      KUBECONFIG_PATH: "/kube/config"
+      K8S_ALLOWED_NAMESPACES: "${K8S_ALLOWED_NAMESPACES}"
+      K8S_INSECURE_SKIP_TLS_VERIFY: "1"
+    volumes:
+      - "${KUBECONFIG_PATH}:/kube/config:ro"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 12
+
+volumes:
+  opensearch-data:
+  postgres-data:

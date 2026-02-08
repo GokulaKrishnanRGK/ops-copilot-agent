@@ -3,14 +3,10 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ops-copilot-rag"
+name = "ops-copilot-agent-runtime"
 version = "0.0.0"
 requires-python = ">=3.11"
-dependencies = [
-  "opensearch-py>=2.4",
-  "openai>=1.30",
-  "ops-copilot-llm-gateway"
-]
+dependencies = ["langgraph>=0.2", "mcp>=1.2.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -20,6 +16,3 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/integration"]
-markers = [
-  "integration: requires OpenSearch and OpenAI credentials"
-]

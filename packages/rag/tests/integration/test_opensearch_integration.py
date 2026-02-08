@@ -12,8 +12,17 @@ from opscopilot_rag.retrieval import retrieve_knn
 from opscopilot_rag.types import EmbeddingRequest, OpenSearchConfig
 
 
+def _embedding_provider() -> str:
+    return os.getenv("LLM_EMBEDDING_PROVIDER", "openai").lower()
+
+
 def _missing_env() -> list[str]:
-    required = ["OPENSEARCH_URL", "OPENAI_API_KEY", "OPENAI_EMBEDDING_MODEL"]
+    required = ["OPENSEARCH_URL"]
+    provider = _embedding_provider()
+    if provider == "openai":
+        required += ["OPENAI_API_KEY", "OPENAI_EMBEDDING_MODEL"]
+    if provider == "bedrock":
+        required += ["BEDROCK_REGION", "BEDROCK_EMBEDDING_MODEL_ID"]
     return [name for name in required if not os.getenv(name)]
 
 

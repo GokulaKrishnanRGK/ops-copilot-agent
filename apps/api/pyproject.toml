@@ -10,5 +10,5 @@ dependencies = ["pytest>=7"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration"]
 python_files = ["test_*.py", "*_test.py"]

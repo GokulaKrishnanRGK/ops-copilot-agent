@@ -24,5 +24,10 @@ func NewClient() (*kubernetes.Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	if os.Getenv("K8S_INSECURE_SKIP_TLS_VERIFY") == "1" {
+		cfg.TLSClientConfig.Insecure = true
+		cfg.TLSClientConfig.CAData = nil
+		cfg.TLSClientConfig.CAFile = ""
+	}
 	return kubernetes.NewForConfig(cfg)
 }
