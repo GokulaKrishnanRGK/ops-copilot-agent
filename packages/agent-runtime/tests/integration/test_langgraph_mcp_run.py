@@ -1,28 +1,28 @@
+import os
+
+import pytest
+
 from opscopilot_agent_runtime.graph import AgentGraph
 from opscopilot_agent_runtime.runtime import AgentRuntime, ExecutionLimits
+from opscopilot_agent_runtime.mcp_client import MCPClient
 from opscopilot_agent_runtime.nodes.planner_node import PlannerNode
-from opscopilot_agent_runtime.nodes.tool_executor_node import ToolExecutorNode
 from opscopilot_agent_runtime.nodes.clarifier_node import ClarifierNode
+from opscopilot_agent_runtime.nodes.tool_executor_node import ToolExecutorNode
 from opscopilot_agent_runtime.state import AgentState
-from opscopilot_agent_runtime.mcp_client import MCPTool
 from opscopilot_agent_runtime.runtime.tool_registry import ToolRegistry
 
 
-class FakeMCPClient:
-    def list_tools(self):
-        return [MCPTool(name="k8s.list_pods", description="", input_schema=None, output_schema=None)]
-
-    def call_tool(self, _name: str, _arguments: dict) -> dict:
-        return {"content": [{"type": "text", "text": "ok"}], "structured_content": {}}
-
-
-def test_agent_runtime_runs_bounded_graph():
-    registry = ToolRegistry(client=FakeMCPClient())
+def test_langgraph_mcp_run():
+    if os.getenv("RUN_MCP_INTEGRATION") != "1":
+        pytest.skip("RUN_MCP_INTEGRATION not enabled")
+    if not os.getenv("MCP_BASE_URL"):
+        pytest.skip("MCP_BASE_URL not set")
+    client = MCPClient.from_env()
     graph = AgentGraph(
-        tool_registry=registry,
+        tool_registry=ToolRegistry(client=client),
         planner=PlannerNode(),
         clarifier=ClarifierNode(),
-        tool_executor=ToolExecutorNode(client=FakeMCPClient()),
+        tool_executor=ToolExecutorNode(client=client),
         critic=None,
     )
     limits = ExecutionLimits(
@@ -32,6 +32,8 @@ def test_agent_runtime_runs_bounded_graph():
         max_execution_time_ms=1000,
     )
     runtime = AgentRuntime(graph=graph, limits=limits)
-    result = runtime.run(AgentState())
+    namespace = os.getenv("MCP_NAMESPACE", "default")
+    label_selector = os.getenv("MCP_LABEL_SELECTOR", "")
+    result = runtime.run(AgentState(namespace=namespace, label_selector=label_selector))
     assert result.tool_results is not None
     assert result.tool_results[0].tool_name == "k8s.list_pods"

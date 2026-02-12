@@ -12,10 +12,11 @@ def test_mcp_integration_call_tool():
     if not base_url:
         pytest.skip("MCP_BASE_URL not set")
     client = MCPClient.from_env()
+    namespace = os.getenv("MCP_NAMESPACE", "default")
+    label_selector = os.getenv("MCP_LABEL_SELECTOR", "")
     response = client.call_tool(
-        "k8s.list_pods", {"namespace": "default", "label_selector": ""}
+        "k8s.list_pods", {"namespace": namespace, "label_selector": label_selector}
     )
-    print(response)
     assert "structured_content" in response
     structured = response["structured_content"]
     assert structured.get("status") == "success"
