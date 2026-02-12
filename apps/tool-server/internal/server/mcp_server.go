@@ -52,7 +52,9 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace":      input.Namespace,
 				"label_selector": input.LabelSelector,
 			}
+			debugLogf("mcp tool_call name=k8s.list_pods args=%v", payload)
 			resp := runToolRequest("k8s.list_pods", payload)
+			debugLogf("mcp tool_result name=k8s.list_pods status=%s error=%v", resp.Status, resp.Error)
 			return nil, resp, nil
 		}),
 	)
@@ -63,7 +65,9 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace": input.Namespace,
 				"pod_name":  input.PodName,
 			}
+			debugLogf("mcp tool_call name=k8s.describe_pod args=%v", payload)
 			resp := runToolRequest("k8s.describe_pod", payload)
+			debugLogf("mcp tool_result name=k8s.describe_pod status=%s error=%v", resp.Status, resp.Error)
 			return nil, resp, nil
 		}),
 	)
@@ -74,7 +78,9 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace": input.Namespace,
 				"pod_name":  input.PodName,
 			}
+			debugLogf("mcp tool_call name=k8s.get_pod_events args=%v", payload)
 			resp := runToolRequest("k8s.get_pod_events", payload)
+			debugLogf("mcp tool_result name=k8s.get_pod_events status=%s error=%v", resp.Status, resp.Error)
 			return nil, resp, nil
 		}),
 	)
@@ -91,7 +97,9 @@ func registerMCPTools(server *mcp.Server) {
 			if input.TailLines > 0 {
 				payload["tail_lines"] = input.TailLines
 			}
+			debugLogf("mcp tool_call name=k8s.get_pod_logs args=%v", payload)
 			resp := runToolRequest("k8s.get_pod_logs", payload)
+			debugLogf("mcp tool_result name=k8s.get_pod_logs status=%s error=%v", resp.Status, resp.Error)
 			return nil, resp, nil
 		}),
 	)
@@ -102,7 +110,9 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace":       input.Namespace,
 				"deployment_name": input.DeploymentName,
 			}
+			debugLogf("mcp tool_call name=k8s.describe_deployment args=%v", payload)
 			resp := runToolRequest("k8s.describe_deployment", payload)
+			debugLogf("mcp tool_result name=k8s.describe_deployment status=%s error=%v", resp.Status, resp.Error)
 			return nil, resp, nil
 		}),
 	)

@@ -9,8 +9,10 @@ import (
 )
 
 func executeTool(req toolRequest) toolResponse {
+	debugLogf("tool execute start name=%s args=%v timeout_ms=%d", req.ToolName, req.Args, req.Timeout)
 	handler, ok := toolRegistry[req.ToolName]
 	if !ok {
+		debugLogf("tool execute error name=%s reason=tool_not_implemented", req.ToolName)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -22,6 +24,7 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	namespace, _ := req.Args["namespace"].(string)
 	if namespace == "" {
+		debugLogf("tool execute error name=%s reason=namespace_required", req.ToolName)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -33,6 +36,7 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	allowed := k8s.ParseAllowlist(os.Getenv("K8S_ALLOWED_NAMESPACES"))
 	if !k8s.IsAllowed(allowed, namespace) {
+		debugLogf("tool execute error name=%s reason=namespace_not_allowed namespace=%s", req.ToolName, namespace)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -44,6 +48,7 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	client, err := k8s.NewClient()
 	if err != nil {
+		debugLogf("tool execute error name=%s reason=client_init_failed err=%v", req.ToolName, err)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -62,6 +67,7 @@ func executeTool(req toolRequest) toolResponse {
 			"namespace":     namespace,
 			"result_status": "error",
 		})
+		debugLogf("tool execute error name=%s namespace=%s err=%v", req.ToolName, namespace, toolErr)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -78,6 +84,7 @@ func executeTool(req toolRequest) toolResponse {
 		"result_status": "success",
 		"truncated":     didTruncate,
 	})
+	debugLogf("tool execute success name=%s namespace=%s truncated=%t", req.ToolName, namespace, didTruncate)
 	return toolResponse{
 		ToolName:  req.ToolName,
 		Status:    "success",

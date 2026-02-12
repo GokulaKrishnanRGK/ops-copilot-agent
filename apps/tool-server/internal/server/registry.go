@@ -22,9 +22,10 @@ func listPodsHandler(ctx context.Context, client *kubernetes.Clientset, args map
 	namespace, _ := args["namespace"].(string)
 	pods, err := k8s.ListPods(ctx, client, namespace, labelSelector)
 	if err != nil {
+		debugLogf("tool list_pods error=%v", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
-			Message:   "list pods failed",
+			Message:   "list pods failed: " + err.Error(),
 			ToolName:  "k8s.list_pods",
 			Duration:  0,
 		}
@@ -50,9 +51,10 @@ func describePodHandler(ctx context.Context, client *kubernetes.Clientset, args 
 	}
 	pod, err := k8s.DescribePod(ctx, client, namespace, podName)
 	if err != nil {
+		debugLogf("tool describe_pod error=%v", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
-			Message:   "describe pod failed",
+			Message:   "describe pod failed: " + err.Error(),
 			ToolName:  "k8s.describe_pod",
 			Duration:  0,
 		}
@@ -78,9 +80,10 @@ func podEventsHandler(ctx context.Context, client *kubernetes.Clientset, args ma
 	}
 	events, err := k8s.GetPodEvents(ctx, client, namespace, podName)
 	if err != nil {
+		debugLogf("tool get_pod_events error=%v", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
-			Message:   "get pod events failed",
+			Message:   "get pod events failed: " + err.Error(),
 			ToolName:  "k8s.get_pod_events",
 			Duration:  0,
 		}
@@ -111,9 +114,10 @@ func podLogsHandler(ctx context.Context, client *kubernetes.Clientset, args map[
 	}
 	logs, err := k8s.GetPodLogs(ctx, client, namespace, podName, container, tailLines)
 	if err != nil {
+		debugLogf("tool get_pod_logs error=%v", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
-			Message:   "get pod logs failed",
+			Message:   "get pod logs failed: " + err.Error(),
 			ToolName:  "k8s.get_pod_logs",
 			Duration:  0,
 		}
@@ -139,9 +143,10 @@ func describeDeploymentHandler(ctx context.Context, client *kubernetes.Clientset
 	}
 	deployment, err := k8s.DescribeDeployment(ctx, client, namespace, deploymentName)
 	if err != nil {
+		debugLogf("tool describe_deployment error=%v", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
-			Message:   "describe deployment failed",
+			Message:   "describe deployment failed: " + err.Error(),
 			ToolName:  "k8s.describe_deployment",
 			Duration:  0,
 		}
