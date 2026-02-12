@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import Any
 from mcp import ClientSession, types
 from mcp.client.streamable_http import streamable_http_client
 
+from opscopilot_agent_runtime.runtime.logging import get_logger
 
 @dataclass(frozen=True)
 class MCPError(Exception):
@@ -23,6 +25,8 @@ class MCPError(Exception):
 class MCPTool:
     name: str
     description: str
+    input_schema: dict | None
+    output_schema: dict | None
 
 
 class MCPClient:
@@ -39,26 +43,55 @@ class MCPClient:
         return MCPClient(base_url, timeout_ms / 1000.0, max_retries)
 
     def list_tools(self) -> list[MCPTool]:
-        return asyncio.run(self._list_tools())
+        logger = get_logger(__name__)
+        tools = asyncio.run(self._list_tools())
+        if os.getenv("AGENT_DEBUG") == "1":
+            logger.info("mcp list_tools count=%s names=%s", len(tools), [t.name for t in tools])
+        return tools
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict:
+        logger = get_logger(__name__)
+        if os.getenv("AGENT_DEBUG") == "1":
+            logger.info("mcp call_tool name=%s args=%s", name, json.dumps(arguments, default=str))
         return asyncio.run(self._call_tool(name, arguments))
 
     async def _list_tools(self) -> list[MCPTool]:
         async def handler(session: ClientSession):
             tools = await session.list_tools()
-            return [MCPTool(name=t.name, description=t.description or "") for t in tools.tools]
+            result = []
+            for t in tools.tools:
+                input_schema = getattr(t, "inputSchema", None)
+                if input_schema is None:
+                    input_schema = getattr(t, "input_schema", None)
+                output_schema = getattr(t, "outputSchema", None)
+                if output_schema is None:
+                    output_schema = getattr(t, "output_schema", None)
+                result.append(
+                    MCPTool(
+                        name=t.name,
+                        description=t.description or "",
+                        input_schema=input_schema,
+                        output_schema=output_schema,
+                    )
+                )
+            return result
 
         return await self._with_session(handler)
 
     async def _call_tool(self, name: str, arguments: dict[str, Any]) -> dict:
+        logger = get_logger(__name__)
+
         async def handler(session: ClientSession):
             result = await session.call_tool(name, arguments=arguments)
-            return self._result_to_dict(result)
+            payload = self._result_to_dict(result)
+            if os.getenv("AGENT_DEBUG") == "1":
+                logger.info("mcp tool_result name=%s payload=%s", name, json.dumps(payload, default=str))
+            return payload
 
         return await self._with_session(handler)
 
     async def _with_session(self, handler):
+        logger = get_logger(__name__)
         attempt = 0
         while True:
             attempt += 1
@@ -68,6 +101,8 @@ class MCPClient:
                         await session.initialize()
                         return await handler(session)
             except Exception as exc:
+                if os.getenv("AGENT_DEBUG") == "1":
+                    logger.info("mcp session error base_url=%s attempt=%s error=%s", self._base_url, attempt, exc)
                 if attempt > self._max_retries:
                     raise exc
                 await asyncio.sleep(0.2 * attempt)
