@@ -7,7 +7,7 @@ import pytest
 from opscopilot_rag.chunking import chunk_text
 from opscopilot_rag.embeddings import OpenAIEmbeddingAdapter
 from opscopilot_rag.indexing import build_index_documents, bulk_upsert_chunks
-from opscopilot_rag.opensearch_client import create_opensearch_client, ensure_index
+from opscopilot_rag.opensearch_client import OpenSearchClient, ensure_index
 from opscopilot_rag.retrieval import retrieve_knn
 from opscopilot_rag.types import EmbeddingRequest, OpenSearchConfig
 
@@ -33,13 +33,16 @@ def test_opensearch_end_to_end_retrieval():
         pytest.skip("missing env: " + ", ".join(missing))
 
     index_name = f"opscopilot-rag-test-{uuid.uuid4().hex}"
+    base_client = OpenSearchClient()
+    base_config = base_client.config
     config = OpenSearchConfig(
-        url=os.getenv("OPENSEARCH_URL", ""),
+        url=base_config.url,
         index=index_name,
-        username=os.getenv("OPENSEARCH_USERNAME"),
-        password=os.getenv("OPENSEARCH_PASSWORD"),
+        username=base_config.username,
+        password=base_config.password,
+        verify_certs=base_config.verify_certs,
     )
-    client = create_opensearch_client(config)
+    client = OpenSearchClient(config).client
     adapter = OpenAIEmbeddingAdapter()
 
     try:

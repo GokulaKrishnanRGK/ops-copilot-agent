@@ -1,0 +1,10 @@
+Ops Copilot FAQ
+
+Q: What is Ops Copilot?
+A: An AI-driven ops assistant that uses MCP tools to query Kubernetes state and return grounded answers.
+
+Q: What namespace should I use for local tests?
+A: Use the default namespace unless specified otherwise.
+
+Q: How do I get pod logs?
+A: Use k8s.get_pod_logs and provide namespace, pod name, container, and tail_lines.
