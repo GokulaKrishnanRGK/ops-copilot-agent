@@ -8,6 +8,10 @@ if ! command -v kubectl >/dev/null 2>&1; then
   echo "integration: kubectl is required" >&2
   exit 1
 fi
+if ! command -v kind >/dev/null 2>&1; then
+  echo "integration: kind is required" >&2
+  exit 1
+fi
 
 if [ -z "${OPENSEARCH_PASSWORD:-}" ]; then
   echo "integration: OPENSEARCH_PASSWORD is required for integration tests" >&2
@@ -22,14 +26,37 @@ if [ -z "${OPENSEARCH_URL:-}" ]; then
   exit 1
 fi
 
+cluster_name="opscopilot-test"
+if ! kind get clusters | grep -q "^${cluster_name}$"; then
+  kind create cluster --name "${cluster_name}"
+fi
+kubectl config use-context "kind-${cluster_name}" >/dev/null
+for _ in {1..30}; do
+  if kubectl get serviceaccount default >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+if ! kubectl get serviceaccount default >/dev/null 2>&1; then
+  echo "integration: default serviceaccount not ready" >&2
+  exit 1
+fi
+if ! kubectl get pod hello >/dev/null 2>&1; then
+  kubectl run hello --image=nginx --restart=Never >/dev/null
+  kubectl wait --for=condition=Ready pod/hello --timeout=120s >/dev/null
+fi
+
 host_kube="${KUBECONFIG_PATH:-$HOME/.kube/config}"
 kube_tmp="$(mktemp)"
 cleanup() {
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/integration.yml" logs --no-color
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
   fi
-  docker compose -f "$repo_root/deploy/compose/integration.yml" down
+  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" down
   rm -f "$kube_tmp"
+#  if kind get clusters | grep -q "^${cluster_name}$"; then
+#    kind delete cluster --name "${cluster_name}"
+#  fi
 }
 trap cleanup EXIT
 
@@ -51,13 +78,19 @@ fi
 export K8S_ALLOWED_NAMESPACES="${K8S_ALLOWED_NAMESPACES:-default}"
 export MCP_BASE_URL="${MCP_BASE_URL:-http://localhost:8080/mcp}"
 export OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
+export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-root}@localhost:5432/${POSTGRES_DB:-opscopilot}}"
+export LLM_DEBUG="${LLM_DEBUG:-0}"
+export AGENT_DEBUG="${AGENT_DEBUG:-0}"
+export TOOL_SERVER_DEBUG="${TOOL_SERVER_DEBUG:-0}"
 export RUN_MCP_INTEGRATION="1"
+export MCP_NAMESPACE="${MCP_NAMESPACE:-default}"
+export MCP_LABEL_SELECTOR="${MCP_LABEL_SELECTOR:-}"
 if [ -n "${OPENAI_API_KEY:-}" ]; then
   export LLM_EMBEDDING_PROVIDER="${LLM_EMBEDDING_PROVIDER:-openai}"
 fi
 
 KUBECONFIG_PATH="$kube_tmp" \
-  docker compose -f "$repo_root/deploy/compose/integration.yml" up -d --build
+  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" up -d --build
 
 for _ in {1..20}; do
   if curl -sf "http://localhost:8080/health" >/dev/null; then
@@ -69,7 +102,7 @@ done
 if ! curl -sf "http://localhost:8080/health" >/dev/null; then
   echo "tool-server failed health check" >&2
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/integration.yml" logs --no-color
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
   fi
   exit 1
 fi
@@ -85,7 +118,7 @@ done
 if ! docker exec compose-postgres-1 pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-opscopilot}" >/dev/null 2>&1; then
   echo "postgres failed health check" >&2
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/integration.yml" logs --no-color
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
   fi
   exit 1
 fi
@@ -100,37 +133,42 @@ done
 if ! curl -skf -u "${OPENSEARCH_USERNAME}:${OPENSEARCH_PASSWORD}" "${OPENSEARCH_URL}" >/dev/null; then
   echo "opensearch failed health check at ${OPENSEARCH_URL} with user ${OPENSEARCH_USERNAME}" >&2
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/integration.yml" logs --no-color
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
   fi
   exit 1
 fi
+
 
 summary=()
 set +e
 cd packages/agent-runtime
 export KUBECONFIG_PATH="$host_kube"
-pytest -k mcp_integration -q
+pytest_args=()
+if [ "${AGENT_DEBUG:-0}" = "1" ]; then
+  pytest_args+=("--log-cli-level=INFO")
+fi
+MCP_NAMESPACE="$MCP_NAMESPACE" MCP_LABEL_SELECTOR="$MCP_LABEL_SELECTOR" pytest "${pytest_args[@]}" tests/integration
 status=$?
-summary+=("agent-runtime:mcp_integration=$status")
+summary+=("agent-runtime:integration=$status")
 set -e
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/rag"
-  pytest -m integration -q
+  pytest -m integration
   status=$?
   summary+=("rag:integration=$status")
 fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/llm-gateway"
-  pytest -q
+  pytest
   status=$?
   summary+=("llm-gateway=$status")
 fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/db"
-  pytest -q
+  pytest
   status=$?
   summary+=("db=$status")
 fi
@@ -144,13 +182,13 @@ fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/tools"
-  pytest -q
+  pytest
   status=$?
   summary+=("tools=$status")
 fi
 
 if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-  docker compose -f "$repo_root/deploy/compose/integration.yml" logs --no-color
+  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
 fi
 echo "integration summary: ${summary[*]}"
 exit $status

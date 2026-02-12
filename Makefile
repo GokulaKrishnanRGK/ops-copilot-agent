@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down rag-ingest
 
 build:
 	cd apps/web && npm run build
@@ -82,3 +82,6 @@ opensearch-up:
 
 opensearch-down:
 	docker compose --env-file .env -f deploy/compose/opensearch.yml down
+
+rag-ingest:
+	opscopilot-rag-ingest --root packages/rag/sample_docs --extensions .md,.txt

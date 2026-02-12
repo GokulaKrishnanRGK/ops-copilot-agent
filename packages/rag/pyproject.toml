@@ -12,6 +12,9 @@ dependencies = [
   "ops-copilot-llm-gateway"
 ]
 
+[project.scripts]
+opscopilot-rag-ingest = "opscopilot_rag.cli.ingest:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
