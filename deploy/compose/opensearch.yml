@@ -16,6 +16,12 @@ services:
         hard: -1
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf -u \"${OPENSEARCH_USERNAME:-admin}:${OPENSEARCH_PASSWORD}\" https://localhost:9200 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
 
 volumes:
   opensearch-data:
