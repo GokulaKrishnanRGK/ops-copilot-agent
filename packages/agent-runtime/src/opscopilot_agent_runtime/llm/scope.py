@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from typing import Callable
 
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
@@ -35,7 +36,6 @@ def _scope_schema() -> dict:
         "type": "object",
         "properties": {
             "allowed": {"type": "boolean"},
-            "reason": {"type": "string"},
             "response": {"type": "string"},
         },
         "required": ["allowed", "response"],
@@ -73,13 +73,17 @@ class ScopeClassifier(LlmNodeBase):
         tool_names: list[str],
         rag_context: str | None = None,
         recorder: AgentRunRecorder | None = None,
+        on_delta: Callable[[str], None] | None = None,
     ) -> dict:
         system_prompt = (
             "You are a strict scope guard for an agent that can answer using tools "
             "or using retrieved knowledge base context when provided. "
             "If the prompt is not about the available tools and no relevant context is provided, "
             "set allowed=false and provide a short response explaining it only handles tool-based "
-            "or knowledge-base requests."
+            "or knowledge-base requests. "
+            "Use rag_context only to determine if the topic is in scope. "
+            "Do not infer concrete runtime facts or resource names from rag_context. "
+            "Keep response generic and capability-focused."
         )
         payload = {"prompt": prompt, "tools": tool_names}
         if rag_context:
@@ -103,6 +107,7 @@ class ScopeClassifier(LlmNodeBase):
             request=request,
             agent_node="scope",
             recorder=recorder or self._recorder,
+            on_delta=on_delta,
         )
         if response.error:
             raise RuntimeError(response.error.message)

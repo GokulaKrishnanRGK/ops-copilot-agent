@@ -83,12 +83,25 @@ class PlannerNode:
                 logger = get_logger(__name__)
                 logger.info("rag retrieval skipped: %s", exc)
         if next_state.prompt and self._llm_planner:
-            tool_names = [tool.name for tool in tools or []]
+            tool_specs = [
+                {"name": tool.name, "description": tool.description or ""}
+                for tool in (tools or [])
+            ]
+            on_delta = None
+            if next_state.llm_stream_callback is not None:
+                on_delta = lambda text: next_state.llm_stream_callback("planner", text)
             plan_obj = self._llm_planner.plan(
                 next_state.prompt,
-                tool_names,
+                tool_specs,
                 recorder=next_state.recorder,
+                on_delta=on_delta,
             )
-            event = AgentEvent(event_type="planner.completed", payload={"steps": len(plan_obj.steps)})
+            event = AgentEvent(
+                event_type="planner.completed",
+                payload={
+                    "steps": len(plan_obj.steps),
+                    "tools": [step.tool_name for step in plan_obj.steps],
+                },
+            )
             return next_state.merge(plan=plan_obj, event=event)
         return plan(next_state, tools)

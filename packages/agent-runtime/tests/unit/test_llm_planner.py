@@ -48,7 +48,7 @@ def _planner(recorder: AgentRunRecorder | None = None):
 
 def test_llm_planner_builds_plan():
     planner = _planner()
-    plan = planner.plan("check pods", ["k8s.list_pods"])
+    plan = planner.plan("check pods", [{"name": "k8s.list_pods", "description": "List pods"}])
     assert plan.steps[0].tool_name == "k8s.list_pods"
     assert plan.steps[0].args == {}
 
@@ -56,6 +56,6 @@ def test_llm_planner_builds_plan():
 def test_llm_planner_records_calls():
     recorder = FakeRecorder()
     planner = _planner(recorder=recorder)
-    planner.plan("check pods", ["k8s.list_pods"])
+    planner.plan("check pods", [{"name": "k8s.list_pods", "description": "List pods"}])
     assert recorder.llm_calls == 1
     assert recorder.budget_events == 1

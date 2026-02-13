@@ -62,7 +62,9 @@ def test_rag_retrieval_in_runtime(monkeypatch):
             max_execution_time_ms=2000,
         ),
     )
-    result = runtime.run(AgentState(prompt="What is Ops Copilot?"))
+    snapshots = list(runtime.run_stream(AgentState(prompt="What is Ops Copilot?")))
+    assert snapshots
+    result = snapshots[-1]
     assert result.rag is not None
     assert result.answer
     assert result.citations

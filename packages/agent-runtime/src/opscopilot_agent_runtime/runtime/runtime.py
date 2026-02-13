@@ -18,8 +18,7 @@ class AgentRuntime:
         self._limits = limits
         self._recorder = recorder
 
-    def run(self, state: AgentState) -> AgentState:
-        compiled = self._graph.build()
+    def _prepare_state(self, state: AgentState) -> tuple[AgentState, AgentRunRecorder | None]:
         recorder = self._recorder
         config_json = {"limits": {"max_agent_steps": self._limits.max_agent_steps}}
         if recorder:
@@ -34,18 +33,34 @@ class AgentRuntime:
         if state.error and state.error.get("type") == "clarification_required" and state.prompt:
             next_state = next_state.merge(error=None)
         state_with_recorder = next_state.merge(recorder=recorder) if recorder else next_state
+        return state_with_recorder, recorder
+
+    def run(self, state: AgentState) -> AgentState:
+        last_state = state
+        for snapshot in self.run_stream(state):
+            last_state = snapshot
+        return last_state
+
+    def run_stream(self, state: AgentState):
+        compiled = self._graph.build()
+        state_with_recorder, recorder = self._prepare_state(state)
         try:
-            result_dict = compiled.invoke(
+            final_state: AgentState | None = None
+            for result_dict in compiled.stream(
                 state_with_recorder.to_dict(),
                 config={"recursion_limit": self._limits.max_agent_steps},
-            )
+                stream_mode="values",
+            ):
+                final_state = AgentState.from_dict(result_dict)
+                yield final_state
             if recorder:
                 recorder.finish("completed")
-            return AgentState.from_dict(result_dict)
+            if final_state is None:
+                yield state_with_recorder
         except GraphRecursionError as exc:
             if recorder:
                 recorder.finish("failed")
-            return state_with_recorder.merge(
+            yield state_with_recorder.merge(
                 error={
                     "type": "recursion_limit",
                     "message": str(exc),

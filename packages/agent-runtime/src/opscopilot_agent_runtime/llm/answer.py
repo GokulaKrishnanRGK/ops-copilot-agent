@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from typing import Callable
 
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
@@ -110,19 +111,50 @@ class AnswerSynthesizer(LlmNodeBase):
         tool_results: list,
         rag_context: str | None = None,
         recorder: AgentRunRecorder | None = None,
+        on_delta: Callable[[str], None] | None = None,
     ) -> str:
-        system_prompt = (
-            "Return a concise answer grounded only in tool results. "
-            "Do not quote full logs; summarize them in one short sentence."
-        )
+        system_prompt = "Return a concise answer grounded only in tool results."
         context_block = f"\n\nContext:\n{rag_context}" if rag_context else ""
         user_content = (
             f"Prompt: {prompt}{context_block}\n\nTool results:\n{_tool_summary(tool_results)}"
         )
+        if on_delta is not None:
+            request = LlmRequest(
+                model_id=self._model_id,
+                messages=[
+                    LlmMessage(
+                        role="system",
+                        content=(
+                            f"{system_prompt} "
+                            "Return plain text only. "
+                            "Do not quote full logs; summarize them in one short sentence."
+                        ),
+                    ),
+                    LlmMessage(role="user", content=user_content),
+                ],
+                response_format=LlmResponseFormat(type="text", schema=None),
+                temperature=0.0,
+                max_tokens=256,
+                idempotency_key=str(uuid.uuid4()),
+                tags=LlmTags(session_id="answer", agent_run_id="answer", agent_node="answer"),
+            )
+            response = self._call(
+                request=request,
+                agent_node="answer",
+                recorder=recorder or self._recorder,
+                on_delta=on_delta,
+            )
+            answer_text = response.output.text or ""
+            if not answer_text:
+                raise RuntimeError("answer missing")
+            return answer_text
         request = LlmRequest(
             model_id=self._model_id,
             messages=[
-                LlmMessage(role="system", content=system_prompt),
+                LlmMessage(
+                    role="system",
+                    content=f"{system_prompt} Do not quote full logs; summarize them in one short sentence.",
+                ),
                 LlmMessage(role="user", content=user_content),
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_response_schema()),

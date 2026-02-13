@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from opscopilot_agent_runtime.llm.answer import AnswerSynthesizer
+from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -87,10 +88,20 @@ class AnswerNode:
                 raise RuntimeError("tool_results required")
             results = []
         llm_results = self._sanitize_tool_results(results)
+        on_delta = None
+        if state.llm_stream_callback is not None:
+            on_delta = lambda text: state.llm_stream_callback("answer", text)
+        elif state.stream_callback is not None:
+            on_delta = state.stream_callback
         answer = self._synthesizer.synthesize(
             prompt,
             llm_results,
             rag_context=state.rag.text if state.rag else None,
             recorder=state.recorder,
+            on_delta=on_delta,
         )
-        return state.merge(answer=answer, citations=state.rag.citations if state.rag else None)
+        return state.merge(
+            answer=answer,
+            citations=state.rag.citations if state.rag else None,
+            event=AgentEvent(event_type="answer.completed", payload={}),
+        )

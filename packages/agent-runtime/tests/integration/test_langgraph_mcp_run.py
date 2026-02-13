@@ -18,7 +18,7 @@ class _StaticClarifier:
         self._namespace = namespace
         self._label_selector = label_selector
 
-    def clarify(self, state, tools):  # noqa: ARG002
+    def clarify(self, state, tools, on_delta=None):  # noqa: ARG002
         return {
             "action": "proceed",
             "steps": [
@@ -34,7 +34,7 @@ class _StaticClarifier:
 
 
 class _StaticPlanner:
-    def plan(self, prompt, tool_names, recorder=None):  # noqa: ARG002
+    def plan(self, prompt, tool_names, recorder=None, on_delta=None):  # noqa: ARG002
         return Plan(
             steps=[
                 PlanStep(
@@ -46,7 +46,7 @@ class _StaticPlanner:
         )
 
 
-def test_langgraph_mcp_run():
+def test_langgraph_mcp_run_stream():
     if os.getenv("RUN_MCP_INTEGRATION") != "1":
         pytest.skip("RUN_MCP_INTEGRATION not enabled")
     if not os.getenv("MCP_BASE_URL"):
@@ -68,12 +68,15 @@ def test_langgraph_mcp_run():
         max_execution_time_ms=1000,
     )
     runtime = AgentRuntime(graph=graph, limits=limits)
-    result = runtime.run(
-        AgentState(
-            prompt="list pods in default namespace",
-            namespace=namespace,
-            label_selector=label_selector,
+    snapshots = list(
+        runtime.run_stream(
+            AgentState(
+                prompt="list pods in default namespace",
+                namespace=namespace,
+                label_selector=label_selector,
+            )
         )
     )
-    assert result.tool_results is not None
-    assert result.tool_results[0].tool_name == "k8s.list_pods"
+    assert snapshots
+    assert snapshots[-1].tool_results is not None
+    assert snapshots[-1].tool_results[0].tool_name == "k8s.list_pods"

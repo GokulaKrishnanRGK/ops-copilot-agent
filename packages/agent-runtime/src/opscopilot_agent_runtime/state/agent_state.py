@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
+from typing import Callable
 
 if TYPE_CHECKING:
     from opscopilot_agent_runtime.runtime.events import AgentEvent
@@ -28,6 +29,8 @@ class AgentState:
     container: str | None = None
     tail_lines: int | None = None
     tools: list[MCPTool] | None = None
+    stream_callback: Callable[[str], None] | None = None
+    llm_stream_callback: Callable[[str, str], None] | None = None
     recorder: AgentRunRecorder | None = None
     event: AgentEvent | None = None
     error: dict | None = None
@@ -50,6 +53,8 @@ class AgentState:
             "container": self.container,
             "tail_lines": self.tail_lines,
             "tools": self.tools,
+            "stream_callback": self.stream_callback,
+            "llm_stream_callback": self.llm_stream_callback,
             "recorder": self.recorder,
             "event": self.event,
             "error": self.error,
@@ -71,6 +76,8 @@ class AgentState:
             container=payload.get("container"),
             tail_lines=payload.get("tail_lines"),
             tools=payload.get("tools"),
+            stream_callback=payload.get("stream_callback"),
+            llm_stream_callback=payload.get("llm_stream_callback"),
             recorder=payload.get("recorder"),
             event=payload.get("event"),
             error=payload.get("error"),

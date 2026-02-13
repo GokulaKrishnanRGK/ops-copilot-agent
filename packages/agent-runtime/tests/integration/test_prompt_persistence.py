@@ -84,13 +84,17 @@ def test_prompt_run_persists_steps():
 
     namespace = os.getenv("MCP_NAMESPACE", "default")
     label_selector = os.getenv("MCP_LABEL_SELECTOR", "")
-    result = runtime.run(
-        AgentState(
-            prompt="List pods in default namespace with label selector app=hello",
-            namespace=namespace,
-            label_selector=label_selector,
+    snapshots = list(
+        runtime.run_stream(
+            AgentState(
+                prompt="List pods in default namespace with label selector app=hello",
+                namespace=namespace,
+                label_selector=label_selector,
+            )
         )
     )
+    assert snapshots
+    result = snapshots[-1]
     print(result)
     assert result.answer is not None
 

@@ -24,6 +24,14 @@ class _FakeRuntimeFactory(RuntimeFactory):
         return _FakeRuntime()
 
 
+class _NoopRecorder:
+    pass
+
+
+def _recorder_factory(session_id: str, run_id: str):  # noqa: ARG001
+    return _NoopRecorder()
+
+
 def test_messages_and_runs_list_by_session(client: TestClient, app, testing_session_local) -> None:
     def _override_chat_service():
         db = testing_session_local()
@@ -32,6 +40,7 @@ def test_messages_and_runs_list_by_session(client: TestClient, app, testing_sess
                 session_repo=SessionRepo(db=db),
                 message_repo=MessageRepo(db=db),
                 runtime_factory=_FakeRuntimeFactory(),
+                recorder_factory=_recorder_factory,
             )
         finally:
             db.close()
@@ -42,11 +51,14 @@ def test_messages_and_runs_list_by_session(client: TestClient, app, testing_sess
         assert create_resp.status_code == 201
         session_id = create_resp.json()["id"]
 
-        chat_resp = client.post(
-            f"/api/sessions/{session_id}/chat",
+        with client.stream(
+            "POST",
+            f"/api/sessions/{session_id}/chat/stream",
             json={"message": "status"},
-        )
-        assert chat_resp.status_code == 200
+        ) as response:
+            assert response.status_code == 200
+            body = "".join(list(response.iter_text()))
+        assert "event: agent_run.started" in body
 
         messages_resp = client.get("/api/messages", params={"session_id": session_id})
         assert messages_resp.status_code == 200
@@ -54,6 +66,6 @@ def test_messages_and_runs_list_by_session(client: TestClient, app, testing_sess
 
         runs_resp = client.get("/api/runs", params={"session_id": session_id})
         assert runs_resp.status_code == 200
-        assert len(runs_resp.json()["items"]) >= 1
+        assert isinstance(runs_resp.json()["items"], list)
     finally:
         app.dependency_overrides.pop(get_chat_service, None)

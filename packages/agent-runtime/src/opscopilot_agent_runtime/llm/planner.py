@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from typing import Callable
 
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
@@ -52,10 +53,12 @@ def _plan_schema() -> dict:
                         "tool_name": {"type": "string"},
                     },
                     "required": ["tool_name"],
+                    "additionalProperties": False,
                 },
             }
         },
         "required": ["steps"],
+        "additionalProperties": False,
     }
 
 
@@ -87,12 +90,16 @@ class LlmPlanner(LlmNodeBase):
     def plan(
         self,
         prompt: str,
-        tool_names: list[str],
+        tools: list[dict[str, str]],
         recorder: AgentRunRecorder | None = None,
+        on_delta: Callable[[str], None] | None = None,
     ) -> Plan:
         system_prompt = (
             "You are a planning system that returns tool steps as JSON. "
             "Only use tool names from the provided list. "
+            "Do not include arguments, params, or any fields besides tool_name. "
+            "Each tool_name may appear at most once in steps; deduplicate repeated requests. "
+            "Return only the minimal ordered set of tools needed. "
             "If no tool is needed, return an empty steps array."
         )
         request = LlmRequest(
@@ -101,7 +108,7 @@ class LlmPlanner(LlmNodeBase):
                 LlmMessage(role="system", content=system_prompt),
                 LlmMessage(
                     role="user",
-                    content=json.dumps({"prompt": prompt, "tools": tool_names}),
+                    content=json.dumps({"prompt": prompt, "tools": tools}),
                 ),
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_plan_schema()),
@@ -114,6 +121,7 @@ class LlmPlanner(LlmNodeBase):
             request=request,
             agent_node="planner",
             recorder=recorder or self._recorder,
+            on_delta=on_delta,
         )
         if response.error:
             raise RuntimeError(response.error.message)
@@ -121,10 +129,14 @@ class LlmPlanner(LlmNodeBase):
         from opscopilot_agent_runtime.nodes.planner_node import Plan, PlanStep
 
         steps = []
+        seen_tools: set[str] = set()
         for item in payload.get("steps", []):
             tool_name = item.get("tool_name")
             if not tool_name:
                 continue
+            if tool_name in seen_tools:
+                continue
+            seen_tools.add(tool_name)
             steps.append(PlanStep(step_id=str(uuid.uuid4()), tool_name=tool_name, args={}))
         if not steps:
             return Plan(steps=[])

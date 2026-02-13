@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Callable
 
-from opscopilot_llm_gateway.accounting import CostLedger
+from opscopilot_llm_gateway.accounting import CostLedger, CostRecord
 from opscopilot_llm_gateway.budgets import BudgetEnforcer
 from opscopilot_llm_gateway.costs import estimate_cost_usd
 from opscopilot_llm_gateway.gateway import run_gateway_call
@@ -34,6 +35,7 @@ class LlmNodeBase:
         request: LlmRequest,
         agent_node: str,
         recorder: AgentRunRecorder | None,
+        on_delta: Callable[[str], None] | None = None,
     ):
         logger = get_logger(__name__)
         if os.getenv("AGENT_DEBUG") == "1" or os.getenv("LLM_DEBUG") == "1":
@@ -43,13 +45,36 @@ class LlmNodeBase:
                 request.model_id,
                 json.dumps([m.content for m in request.messages], default=str),
             )
-        response = run_gateway_call(
-            provider=self._provider,
-            request=request,
-            cost_table=self._cost_table,
-            budget=self._budget,
-            ledger=self._ledger,
-        )
+        if on_delta is None:
+            response = run_gateway_call(
+                provider=self._provider,
+                request=request,
+                cost_table=self._cost_table,
+                budget=self._budget,
+                ledger=self._ledger,
+            )
+        else:
+            response = self._provider.invoke_stream(request, on_delta)
+            estimated = estimate_cost_usd(
+                self._cost_table,
+                request.model_id,
+                response.tokens_input,
+                response.tokens_output,
+            )
+            if not self._budget.can_spend(estimated):
+                raise RuntimeError("budget_exceeded")
+            self._budget.record_spend(estimated)
+            self._ledger.record(
+                CostRecord(
+                    session_id=request.tags.session_id,
+                    agent_run_id=request.tags.agent_run_id,
+                    agent_node=request.tags.agent_node,
+                    model_id=request.model_id,
+                    tokens_input=response.tokens_input,
+                    tokens_output=response.tokens_output,
+                    cost_usd=estimated,
+                )
+            )
         cost_usd = estimate_cost_usd(
             self._cost_table,
             self._model_id,
