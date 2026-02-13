@@ -39,12 +39,15 @@ def agent_run_completed(session_id: str, run_id: str, summary: str = "completed"
     )
 
 
-def assistant_delta(session_id: str, run_id: str, text: str) -> dict:
+def assistant_delta(session_id: str, run_id: str, text: str, source: str | None = None) -> dict:
+    payload = {"text": text}
+    if source:
+        payload["source"] = source
     return make_event(
         event_type="assistant.token.delta",
         session_id=session_id,
         run_id=run_id,
-        payload={"text": text},
+        payload=payload,
     )
 
 
@@ -67,4 +70,13 @@ def agent_run_failed(session_id: str, run_id: str, reason: str, failure_type: st
         session_id=session_id,
         run_id=run_id,
         payload={"reason": reason, "failure_type": failure_type},
+    )
+
+
+def runtime_event(session_id: str, run_id: str, event_type: str, payload: dict | None = None) -> dict:
+    return make_event(
+        event_type=event_type,
+        session_id=session_id,
+        run_id=run_id,
+        payload=payload or {},
     )

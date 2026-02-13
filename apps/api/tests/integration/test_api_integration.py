@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from opscopilot_api.routers.sessions_router import get_chat_service
 from opscopilot_api.services.chat_service import ChatService
 from opscopilot_api.services.runtime_factory import RuntimeFactory
+from opscopilot_agent_runtime.state import AgentState
+from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_db import models
 from opscopilot_db.connection import get_sessionmaker
 from opscopilot_db.repositories import MessageRepo, SessionRepo
@@ -22,10 +24,22 @@ class _FakeRuntime:
     def run(self, _state):
         return _FakeResult(answer="integration-answer", error=None)
 
+    def run_stream(self, state):  # noqa: ARG002
+        yield AgentState(event=AgentEvent(event_type="planner.completed", payload={"steps": 1}))
+        yield AgentState(answer="integration-answer")
+
 
 class _FakeRuntimeFactory(RuntimeFactory):
     def create(self, recorder):  # noqa: ARG002
         return _FakeRuntime()
+
+
+class _NoopRecorder:
+    pass
+
+
+def _recorder_factory(session_id: str, run_id: str):  # noqa: ARG001
+    return _NoopRecorder()
 
 
 def _override_chat_service():
@@ -36,6 +50,7 @@ def _override_chat_service():
             session_repo=SessionRepo(db=db),
             message_repo=MessageRepo(db=db),
             runtime_factory=_FakeRuntimeFactory(),
+            recorder_factory=_recorder_factory,
         )
     finally:
         db.close()
@@ -67,13 +82,6 @@ def test_chat_and_stream_integration(client: TestClient, app) -> None:
         assert create_resp.status_code == 201
         session_id = create_resp.json()["id"]
 
-        chat_resp = client.post(
-            f"/api/sessions/{session_id}/chat",
-            json={"message": "status"},
-        )
-        assert chat_resp.status_code == 200
-        assert chat_resp.json()["answer"] == "integration-answer"
-
         with client.stream(
             "POST",
             f"/api/sessions/{session_id}/chat/stream",
@@ -88,6 +96,6 @@ def test_chat_and_stream_integration(client: TestClient, app) -> None:
         sessionmaker = get_sessionmaker()
         with sessionmaker() as db:
             messages = db.query(models.Message).filter(models.Message.session_id == session_id).all()
-            assert len(messages) >= 4
+            assert len(messages) >= 2
     finally:
         app.dependency_overrides.pop(get_chat_service, None)

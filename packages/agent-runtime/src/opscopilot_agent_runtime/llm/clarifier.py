@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from typing import Callable
 
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
@@ -46,7 +47,6 @@ def _clarifier_schema() -> dict:
                     "required": ["tool_name", "args"],
                 },
             },
-            "clarify_question": {"type": "string"},
             "missing_fields": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -76,7 +76,12 @@ class LlmClarifier(LlmNodeBase):
         ledger = CostLedger()
         return LlmClarifier(provider, model_id, cost_table, budget, ledger)
 
-    def clarify(self, state: AgentState, tools: list[dict]) -> dict:
+    def clarify(
+        self,
+        state: AgentState,
+        tools: list[dict],
+        on_delta: Callable[[str], None] | None = None,
+    ) -> dict:
         if state.plan is None:
             raise RuntimeError("plan_missing")
         known_args = {
@@ -94,16 +99,16 @@ class LlmClarifier(LlmNodeBase):
             "Never use FAQ/docs/RAG/tool descriptions as source values for arguments. "
             "Never return null for required arguments. "
             "If any required argument is missing or unknown, set action=clarify and include "
-            "a clear clarify_question and a missing_fields list naming the required fields. "
+            "a missing_fields list naming the missing required fields. "
             "Only include arguments that exist in the tool's input_schema; do not invent keys. "
             "Do not guess missing values. "
             "If prompt text contains namespace (example: 'in default namespace'), do not ask for namespace. "
             "Clarify only when required fields are missing in both prompt and known_args. "
-            "clarify_question MUST be natural, user-facing English. "
             "Do NOT mention internal tool names (such as k8s.*), schema field names "
             "(such as namespace, pod_name, label_selector, tail_lines, deployment_name), "
             "or implementation details."
         )
+        planned_steps = [{"tool_name": step.tool_name} for step in state.plan.steps]
         request = LlmRequest(
             model_id=self._model_id,
             messages=[
@@ -114,7 +119,7 @@ class LlmClarifier(LlmNodeBase):
                         {
                             "prompt": state.prompt,
                             "known_args": known_args,
-                            "plan": {"steps": [step.__dict__ for step in state.plan.steps]},
+                            "plan": {"steps": planned_steps},
                             "tools": tools,
                         }
                     ),
@@ -126,24 +131,28 @@ class LlmClarifier(LlmNodeBase):
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="clarifier", agent_run_id="clarifier", agent_node="clarifier"),
         )
-        response = self._call(request=request, agent_node="clarifier", recorder=state.recorder)
+        response = self._call(
+            request=request,
+            agent_node="clarifier",
+            recorder=state.recorder,
+        )
         payload = response.output.json or {}
         action = payload.get("action")
-        question = payload.get("clarify_question")
-        missing_fields = payload.get("missing_fields")
-        if action == "clarify" and (not isinstance(question, str) or not question.strip()):
-            payload["clarify_question"] = self._generate_clarify_question(
+        if action == "clarify":
+            payload["clarify_question"] = self.generate_clarify_question(
                 prompt=state.prompt or "",
-                missing_fields=missing_fields if isinstance(missing_fields, list) else [],
+                missing_fields=payload.get("missing_fields") if isinstance(payload.get("missing_fields"), list) else [],
                 recorder=state.recorder,
+                on_delta=on_delta,
             )
         return payload
 
-    def _generate_clarify_question(
+    def generate_clarify_question(
         self,
         prompt: str,
         missing_fields: list[str],
         recorder: AgentRunRecorder | None = None,
+        on_delta: Callable[[str], None] | None = None,
     ) -> str:
         request = LlmRequest(
             model_id=self._model_id,
@@ -151,8 +160,8 @@ class LlmClarifier(LlmNodeBase):
                 LlmMessage(
                     role="system",
                     content=(
-                        "Write one concise clarification question for the user. "
-                        "The question must be specific, natural English, and directly ask only for the missing details. "
+                        "Write one concise clarification question for the user in natural English. "
+                        "Ask specifically for what is missing so execution can continue. "
                         "Do not mention internal tool names, schema names, or implementation details."
                     ),
                 ),
@@ -166,26 +175,19 @@ class LlmClarifier(LlmNodeBase):
                     ),
                 ),
             ],
-            response_format=LlmResponseFormat(
-                type="json_schema",
-                schema={
-                    "type": "object",
-                    "properties": {"clarify_question": {"type": "string"}},
-                    "required": ["clarify_question"],
-                },
-            ),
+            response_format=LlmResponseFormat(type="text", schema=None),
             temperature=0.0,
             max_tokens=128,
             idempotency_key=str(uuid.uuid4()),
-            tags=LlmTags(session_id="clarifier", agent_run_id="clarifier", agent_node="clarifier"),
+            tags=LlmTags(session_id="clarifier", agent_run_id="clarifier", agent_node="clarifier_question"),
         )
         response = self._call(
             request=request,
-            agent_node="clarifier",
+            agent_node="clarifier_question",
             recorder=recorder,
+            on_delta=on_delta,
         )
-        payload = response.output.json or {}
-        question = payload.get("clarify_question")
-        if isinstance(question, str) and question.strip():
+        question = (response.output.text or "").strip()
+        if question:
             return question
-        return "Could you clarify the missing details so I can continue?"
+        raise RuntimeError("clarify question missing")

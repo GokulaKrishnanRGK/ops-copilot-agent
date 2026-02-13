@@ -61,16 +61,22 @@ def test_clarifier_session_followup():
 
     namespace = os.getenv("MCP_NAMESPACE", "default")
     state = AgentState(prompt="Whats the status of hello pod and get its logs from default namespace", namespace=namespace)
-    first = runtime.run(state)
+    first_snapshots = list(runtime.run_stream(state))
+    assert first_snapshots
+    first = first_snapshots[-1]
     assert first.error is not None
     assert first.error.get("type") == "clarification_required"
 
     followup_prompt = "Container is hello and get last 50 lines"
-    second = runtime.run(
-        first.merge(
-            prompt=followup_prompt
+    second_snapshots = list(
+        runtime.run_stream(
+            first.merge(
+                prompt=followup_prompt
+            )
         )
     )
+    assert second_snapshots
+    second = second_snapshots[-1]
     # logger = get_logger(__name__)
     # logger.info("test_clarifier_session_followup state=%s", second)
     assert second.tool_results is not None

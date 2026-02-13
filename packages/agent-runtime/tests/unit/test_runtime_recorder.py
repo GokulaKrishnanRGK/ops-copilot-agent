@@ -17,7 +17,7 @@ class FakeRecorder:
         self.finished = status
 
 
-def test_runtime_records_start_and_finish():
+def test_runtime_stream_records_start_and_finish():
     def planner(state):
         return state.merge(plan="ok")
 
@@ -36,6 +36,7 @@ def test_runtime_records_start_and_finish():
         ),
         recorder=recorder,
     )
-    runtime.run(AgentState())
+    snapshots = list(runtime.run_stream(AgentState()))
+    assert snapshots
     assert recorder.started is True
     assert recorder.finished == "completed"

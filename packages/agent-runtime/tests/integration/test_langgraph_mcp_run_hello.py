@@ -18,7 +18,7 @@ class _StaticClarifier:
         self._namespace = namespace
         self._label_selector = label_selector
 
-    def clarify(self, state, tools):  # noqa: ARG002
+    def clarify(self, state, tools, on_delta=None):  # noqa: ARG002
         return {
             "action": "proceed",
             "steps": [
@@ -34,7 +34,7 @@ class _StaticClarifier:
 
 
 class _StaticPlanner:
-    def plan(self, prompt, tool_names, recorder=None):  # noqa: ARG002
+    def plan(self, prompt, tool_names, recorder=None, on_delta=None):  # noqa: ARG002
         return Plan(
             steps=[
                 PlanStep(
@@ -69,13 +69,17 @@ def test_langgraph_mcp_run_hello_pod():
         max_execution_time_ms=1000,
     )
     runtime = AgentRuntime(graph=graph, limits=limits)
-    result = runtime.run(
-        AgentState(
-            prompt="list pods in default namespace",
-            namespace=namespace,
-            label_selector=label_selector,
+    snapshots = list(
+        runtime.run_stream(
+            AgentState(
+                prompt="list pods in default namespace",
+                namespace=namespace,
+                label_selector=label_selector,
+            )
         )
     )
+    assert snapshots
+    result = snapshots[-1]
     assert result.tool_results is not None
     payload = result.tool_results[0].result
     assert payload["structured_content"]["status"] == "success"

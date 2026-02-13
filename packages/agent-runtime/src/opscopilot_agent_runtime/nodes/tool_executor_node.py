@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from opscopilot_agent_runtime.mcp_client import MCPClient
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
+from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_agent_runtime.runtime.logging import get_logger
 from opscopilot_agent_runtime.state import AgentState
 from opscopilot_agent_runtime.nodes.planner_node import Plan
@@ -57,4 +58,7 @@ class ToolExecutorNode:
             raise RuntimeError("plan_missing")
         recorder = self._recorder or state.recorder
         results = execute_plan(state.plan, self._client, recorder)
-        return state.merge(tool_results=results)
+        return state.merge(
+            tool_results=results,
+            event=AgentEvent(event_type="tool_executor.completed", payload={"steps": len(results)}),
+        )

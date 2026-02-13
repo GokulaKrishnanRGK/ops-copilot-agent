@@ -4,6 +4,7 @@ import uuid
 
 from opscopilot_agent_runtime.llm.clarifier import LlmClarifier
 from opscopilot_agent_runtime.nodes.planner_node import Plan, PlanStep
+from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -25,12 +26,6 @@ def _allowed_fields(schema: dict | None) -> set[str]:
     return {field for field in properties.keys() if isinstance(field, str)}
 
 
-def _safe_clarify_message(question: str | None) -> str:
-    if question:
-        return question
-    return "I need one more detail to continue. Could you clarify the missing information?"
-
-
 class ClarifierNode:
     def __init__(self, clarifier: LlmClarifier | None = None) -> None:
         self._clarifier = clarifier
@@ -48,18 +43,31 @@ class ClarifierNode:
             tools = [tool for tool in tools if tool.name in planned_tools]
         tool_payload = []
         for tool in tools:
+            input_schema = tool.input_schema or {}
+            required = input_schema.get("required")
+            properties = input_schema.get("properties")
             tool_payload.append(
                 {
                     "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": tool.input_schema,
-                    "output_schema": tool.output_schema,
+                    "input_schema": {
+                        "required": required if isinstance(required, list) else [],
+                        "properties": properties if isinstance(properties, dict) else {},
+                    },
                 }
             )
-        payload = self._clarifier.clarify(state, tool_payload)
+        on_delta = None
+        if state.llm_stream_callback is not None:
+            on_delta = lambda text: state.llm_stream_callback("clarifier_question", text)
+        payload = self._clarifier.clarify(state, tool_payload, on_delta=on_delta)
         if payload.get("action") == "clarify":
-            question = _safe_clarify_message(payload.get("clarify_question"))
+            question = payload.get("clarify_question")
+            if not isinstance(question, str) or not question.strip():
+                raise RuntimeError("clarifier question missing")
             return state.merge(
+                event=AgentEvent(
+                    event_type="clarifier.clarification_required",
+                    payload={"question": question},
+                ),
                 error={
                     "type": "clarification_required",
                     "message": question,
@@ -67,8 +75,19 @@ class ClarifierNode:
             )
         missing_fields = payload.get("missing_fields")
         if isinstance(missing_fields, list) and missing_fields:
-            question = _safe_clarify_message(payload.get("clarify_question"))
+            question = payload.get("clarify_question")
+            if not isinstance(question, str) or not question.strip():
+                question = self._clarifier.generate_clarify_question(
+                    prompt=state.prompt or "",
+                    missing_fields=missing_fields,
+                    recorder=state.recorder,
+                    on_delta=on_delta,
+                )
             return state.merge(
+                event=AgentEvent(
+                    event_type="clarifier.clarification_required",
+                    payload={"question": question},
+                ),
                 error={
                     "type": "clarification_required",
                     "message": question,
@@ -82,20 +101,40 @@ class ClarifierNode:
                 continue
             steps.append(PlanStep(step_id=str(uuid.uuid4()), tool_name=tool_name, args=args))
         if not steps:
+            question = self._clarifier.generate_clarify_question(
+                prompt=state.prompt or "",
+                missing_fields=missing_fields if isinstance(missing_fields, list) else [],
+                recorder=state.recorder,
+                on_delta=on_delta,
+            )
             return state.merge(
+                event=AgentEvent(
+                    event_type="clarifier.clarification_required",
+                    payload={"question": question},
+                ),
                 error={
                     "type": "clarification_required",
-                    "message": "clarifier returned no steps",
-                }
+                    "message": question,
+                },
             )
         tool_map = {tool.name: tool for tool in tools}
         for step in steps:
             tool = tool_map.get(step.tool_name)
             if tool is None:
+                question = self._clarifier.generate_clarify_question(
+                    prompt=state.prompt or "",
+                    missing_fields=[],
+                    recorder=state.recorder,
+                    on_delta=on_delta,
+                )
                 return state.merge(
+                    event=AgentEvent(
+                        event_type="clarifier.clarification_required",
+                        payload={"question": question},
+                    ),
                     error={
                         "type": "clarification_required",
-                        "message": f"Unknown tool in clarification result: {step.tool_name}",
+                        "message": question,
                     }
                 )
             required = _required_fields(tool.input_schema)
@@ -103,17 +142,40 @@ class ClarifierNode:
             missing = sorted(field for field in required if field not in step.args)
             extra = sorted(field for field in step.args.keys() if field not in allowed)
             if missing:
+                question = self._clarifier.generate_clarify_question(
+                    prompt=state.prompt or "",
+                    missing_fields=missing,
+                    recorder=state.recorder,
+                    on_delta=on_delta,
+                )
                 return state.merge(
+                    event=AgentEvent(
+                        event_type="clarifier.clarification_required",
+                        payload={"question": question},
+                    ),
                     error={
                         "type": "clarification_required",
-                        "message": _safe_clarify_message(None),
+                        "message": question,
                     }
                 )
             if extra:
+                question = self._clarifier.generate_clarify_question(
+                    prompt=state.prompt or "",
+                    missing_fields=extra,
+                    recorder=state.recorder,
+                    on_delta=on_delta,
+                )
                 return state.merge(
+                    event=AgentEvent(
+                        event_type="clarifier.clarification_required",
+                        payload={"question": question},
+                    ),
                     error={
                         "type": "clarification_required",
-                        "message": "I found extra details that do not apply to this request. Please rephrase with only the needed details.",
+                        "message": question,
                     }
                 )
-        return state.merge(plan=Plan(steps=steps))
+        return state.merge(
+            plan=Plan(steps=steps),
+            event=AgentEvent(event_type="clarifier.completed", payload={"steps": len(steps)}),
+        )

@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Callable
+from queue import Empty, Queue
+import threading
 from uuid import uuid4
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
@@ -12,6 +15,7 @@ from .event_mapper import (
     agent_run_started,
     assistant_delta,
     error_event,
+    runtime_event,
 )
 from .runtime_factory import RuntimeFactory
 
@@ -37,24 +41,60 @@ class ChatService:
         session_repo: repositories.SessionRepository,
         message_repo: repositories.MessageRepository,
         runtime_factory: RuntimeFactory,
+        recorder_factory: Callable[[str, str], AgentRunRecorder] = AgentRunRecorder,
     ) -> None:
         self._session_repo = session_repo
         self._message_repo = message_repo
         self._runtime_factory = runtime_factory
+        self._recorder_factory = recorder_factory
 
     def _load_prompt_history(self, session_id: str) -> list[str]:
         messages = list(self._message_repo.list_by_session(session_id))
         history: list[str] = []
+        pending_user_prompt: str | None = None
         for message in messages:
             content = (message.content or "").strip()
             if not content:
                 continue
-            history.append(content)
+            if message.role == "user":
+                pending_user_prompt = content
+                continue
+            if message.role != "assistant":
+                continue
+            if not pending_user_prompt:
+                continue
+            metadata = message.metadata_json if isinstance(message.metadata_json, dict) else {}
+            error = metadata.get("error") if isinstance(metadata, dict) else None
+            is_out_of_scope = isinstance(error, dict) and error.get("type") == "out_of_scope"
+            if not is_out_of_scope:
+                history.append(pending_user_prompt)
+            pending_user_prompt = None
+        if pending_user_prompt:
+            history.append(pending_user_prompt)
         return history
 
     @staticmethod
     def _is_clarification(result_error: dict | None) -> bool:
         return bool(result_error and result_error.get("type") == "clarification_required")
+
+    @staticmethod
+    def _chunk_text(text: str, max_len: int = 40) -> list[str]:
+        words = text.split(" ")
+        if not words:
+            return [text]
+        chunks: list[str] = []
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            if len(candidate) <= max_len:
+                current = candidate
+            else:
+                if current:
+                    chunks.append(current + " ")
+                current = word
+        if current:
+            chunks.append(current)
+        return chunks
 
     def run(self, session_id: str, prompt: str) -> ChatResult:
         session = self._session_repo.get(session_id)
@@ -75,7 +115,7 @@ class ChatService:
         )
 
         run_id = str(uuid4())
-        recorder = AgentRunRecorder(session_id=session_id, run_id=run_id)
+        recorder = self._recorder_factory(session_id, run_id)
         runtime = self._runtime_factory.create(recorder=recorder)
         try:
             result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
@@ -127,69 +167,154 @@ class ChatService:
         def _stream():
             yield agent_run_started(session_id, run_id)
 
-            recorder = AgentRunRecorder(session_id=session_id, run_id=run_id)
+            recorder = self._recorder_factory(session_id, run_id)
             runtime = self._runtime_factory.create(recorder=recorder)
-            try:
-                result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
-            except Exception as exc:
-                message = str(exc) or "agent runtime failed"
-                self._message_repo.create(
-                    models.Message(
-                        id=str(uuid4()),
-                        session_id=session_id,
-                        role="assistant",
-                        content=message,
-                        created_at=datetime.now(timezone.utc),
-                        metadata_json={"error": {"type": "runtime_error", "message": message}},
-                    )
-                )
-                yield error_event(session_id, run_id, "runtime_error", message)
-                yield agent_run_failed(session_id, run_id, message, "runtime_error")
-                return
+            queue: Queue = Queue()
+            done = object()
 
-            if result.error:
-                error_message = result.error.get("message", "request failed")
-                if self._is_clarification(result.error):
-                    self._message_repo.create(
-                        models.Message(
-                            id=str(uuid4()),
-                            session_id=session_id,
-                            role="assistant",
-                            content=error_message,
-                            created_at=datetime.now(timezone.utc),
-                            metadata_json={"clarification_required": True},
-                        )
-                    )
-                    yield assistant_delta(session_id, run_id, error_message)
-                    yield agent_run_completed(session_id, run_id, "clarification_required")
+            def on_llm_delta(node: str, text: str) -> None:
+                if node in {"answer", "clarifier_question"}:
+                    queue.put(assistant_delta(session_id, run_id, text, source=node))
                     return
-                self._message_repo.create(
-                    models.Message(
-                        id=str(uuid4()),
-                        session_id=session_id,
-                        role="assistant",
-                        content=error_message,
-                        created_at=datetime.now(timezone.utc),
-                        metadata_json={"error": result.error},
-                    )
-                )
-                failure_type = result.error.get("type", "runtime_error")
-                yield error_event(session_id, run_id, failure_type, error_message, result.error)
-                yield agent_run_failed(session_id, run_id, error_message, failure_type)
-                return
 
-            answer_text = result.answer or ""
-            self._message_repo.create(
-                models.Message(
-                    id=str(uuid4()),
-                    session_id=session_id,
-                    role="assistant",
-                    content=answer_text,
-                    created_at=datetime.now(timezone.utc),
-                    metadata_json=None,
-                )
-            )
-            yield assistant_delta(session_id, run_id, answer_text)
-            yield agent_run_completed(session_id, run_id)
+            def worker():
+                try:
+                    answer_emitted = False
+                    clarifier_started_emitted = False
+                    last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
+                    for state in runtime.run_stream(
+                        AgentState(
+                            prompt=prompt,
+                            prompt_history=prompt_history,
+                            llm_stream_callback=on_llm_delta,
+                        )
+                    ):
+                        last_state = state
+                        if state.event is not None:
+                            event_type = state.event.event_type
+                            if event_type in {"clarifier.completed", "clarifier.clarification_required"}:
+                                if not clarifier_started_emitted:
+                                    clarifier_started_emitted = True
+                                    queue.put(runtime_event(session_id, run_id, "clarifier.started", {}))
+                                queue.put(
+                                    runtime_event(
+                                        session_id,
+                                        run_id,
+                                        event_type,
+                                        state.event.payload or {},
+                                    )
+                                )
+                        if state.error:
+                            error_message = state.error.get("message", "request failed")
+                            if self._is_clarification(state.error):
+                                queue.put(
+                                    {
+                                        "__terminal__": "clarification",
+                                        "message": error_message,
+                                    }
+                                )
+                                return
+                            failure_type = state.error.get("type", "runtime_error")
+                            queue.put(
+                                {
+                                    "__terminal__": "error",
+                                    "message": error_message,
+                                    "failure_type": failure_type,
+                                    "context": state.error,
+                                }
+                            )
+                            return
+
+                        if state.answer and not answer_emitted:
+                            answer_emitted = True
+                            queue.put({"__terminal__": "answer", "message": state.answer})
+                            return
+
+                    if last_state.answer:
+                        queue.put({"__terminal__": "answer", "message": last_state.answer})
+                        return
+                    message = "agent runtime completed without an assistant response"
+                    queue.put(
+                        {
+                            "__terminal__": "error",
+                            "message": message,
+                            "failure_type": "runtime_error",
+                            "context": {"type": "runtime_error", "message": message},
+                        }
+                    )
+                except Exception as exc:
+                    message = str(exc) or "agent runtime failed"
+                    queue.put(
+                        {
+                            "__terminal__": "error",
+                            "message": message,
+                            "failure_type": "runtime_error",
+                            "context": {"type": "runtime_error", "message": message},
+                        }
+                    )
+                    queue.put(done)
+
+            thread = threading.Thread(target=worker, daemon=True)
+            thread.start()
+            token_emitted = False
+            while True:
+                try:
+                    item = queue.get(timeout=0.2)
+                except Empty:
+                    if not thread.is_alive():
+                        break
+                    continue
+                if isinstance(item, dict) and "__terminal__" in item:
+                    terminal_type = item.get("__terminal__")
+                    message = item.get("message", "")
+                    if terminal_type == "clarification":
+                        self._message_repo.create(
+                            models.Message(
+                                id=str(uuid4()),
+                                session_id=session_id,
+                                role="assistant",
+                                content=message,
+                                created_at=datetime.now(timezone.utc),
+                                metadata_json={"clarification_required": True},
+                            )
+                        )
+                        if not token_emitted:
+                            for chunk in self._chunk_text(message):
+                                yield assistant_delta(session_id, run_id, chunk, source="clarifier")
+                        yield agent_run_completed(session_id, run_id, "clarification_required")
+                    elif terminal_type == "answer":
+                        self._message_repo.create(
+                            models.Message(
+                                id=str(uuid4()),
+                                session_id=session_id,
+                                role="assistant",
+                                content=message,
+                                created_at=datetime.now(timezone.utc),
+                                metadata_json=None,
+                            )
+                        )
+                        if not token_emitted:
+                            yield assistant_delta(session_id, run_id, message, source="answer")
+                        yield agent_run_completed(session_id, run_id)
+                    else:
+                        self._message_repo.create(
+                            models.Message(
+                                id=str(uuid4()),
+                                session_id=session_id,
+                                role="assistant",
+                                content=message,
+                                created_at=datetime.now(timezone.utc),
+                                metadata_json={"error": item.get("context")},
+                            )
+                        )
+                        failure_type = item.get("failure_type", "runtime_error")
+                        yield error_event(session_id, run_id, failure_type, message, item.get("context"))
+                        yield agent_run_failed(session_id, run_id, message, failure_type)
+                    break
+                if item is done:
+                    break
+                if item.get("type") == "assistant.token.delta":
+                    token_emitted = True
+                yield item
 
         return _stream()
