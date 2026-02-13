@@ -42,11 +42,26 @@ class ChatService:
         self._message_repo = message_repo
         self._runtime_factory = runtime_factory
 
+    def _load_prompt_history(self, session_id: str) -> list[str]:
+        messages = list(self._message_repo.list_by_session(session_id))
+        history: list[str] = []
+        for message in messages:
+            content = (message.content or "").strip()
+            if not content:
+                continue
+            history.append(content)
+        return history
+
+    @staticmethod
+    def _is_clarification(result_error: dict | None) -> bool:
+        return bool(result_error and result_error.get("type") == "clarification_required")
+
     def run(self, session_id: str, prompt: str) -> ChatResult:
         session = self._session_repo.get(session_id)
         if session is None:
             raise SessionNotFoundError("session not found")
 
+        prompt_history = self._load_prompt_history(session_id)
         now = datetime.now(timezone.utc)
         self._message_repo.create(
             models.Message(
@@ -63,13 +78,14 @@ class ChatService:
         recorder = AgentRunRecorder(session_id=session_id, run_id=run_id)
         runtime = self._runtime_factory.create(recorder=recorder)
         try:
-            result = runtime.run(AgentState(prompt=prompt))
+            result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
         except Exception as exc:
             raise ChatExecutionError("agent runtime failed") from exc
 
         answer_text = result.answer
         if answer_text is None and result.error:
             answer_text = result.error.get("message", "request failed")
+        clarification = self._is_clarification(result.error)
         self._message_repo.create(
             models.Message(
                 id=str(uuid4()),
@@ -77,11 +93,17 @@ class ChatService:
                 role="assistant",
                 content=answer_text or "",
                 created_at=datetime.now(timezone.utc),
-                metadata_json={"error": result.error} if result.error else None,
+                metadata_json={"clarification_required": True}
+                if clarification
+                else ({"error": result.error} if result.error else None),
             )
         )
 
-        return ChatResult(run_id=run_id, answer=result.answer, error=result.error)
+        return ChatResult(
+            run_id=run_id,
+            answer=answer_text,
+            error=None if clarification else result.error,
+        )
 
     def run_stream(self, session_id: str, prompt: str):
         session = self._session_repo.get(session_id)
@@ -89,6 +111,7 @@ class ChatService:
             raise SessionNotFoundError("session not found")
 
         run_id = str(uuid4())
+        prompt_history = self._load_prompt_history(session_id)
         now = datetime.now(timezone.utc)
         self._message_repo.create(
             models.Message(
@@ -107,7 +130,7 @@ class ChatService:
             recorder = AgentRunRecorder(session_id=session_id, run_id=run_id)
             runtime = self._runtime_factory.create(recorder=recorder)
             try:
-                result = runtime.run(AgentState(prompt=prompt))
+                result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
             except Exception as exc:
                 message = str(exc) or "agent runtime failed"
                 self._message_repo.create(
@@ -126,6 +149,20 @@ class ChatService:
 
             if result.error:
                 error_message = result.error.get("message", "request failed")
+                if self._is_clarification(result.error):
+                    self._message_repo.create(
+                        models.Message(
+                            id=str(uuid4()),
+                            session_id=session_id,
+                            role="assistant",
+                            content=error_message,
+                            created_at=datetime.now(timezone.utc),
+                            metadata_json={"clarification_required": True},
+                        )
+                    )
+                    yield assistant_delta(session_id, run_id, error_message)
+                    yield agent_run_completed(session_id, run_id, "clarification_required")
+                    return
                 self._message_repo.create(
                     models.Message(
                         id=str(uuid4()),
