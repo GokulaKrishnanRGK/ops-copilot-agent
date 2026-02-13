@@ -11,13 +11,15 @@ from opscopilot_db import models, repositories
 
 from .event_mapper import (
     agent_run_completed,
-    agent_run_failed,
     agent_run_started,
-    assistant_delta,
-    error_event,
-    runtime_event,
 )
 from .runtime_factory import RuntimeFactory
+from .stream_decisions import (
+    StreamEventDecider,
+    StreamLifecycleTracker,
+    terminal_item_from_state,
+    terminal_stream_events,
+)
 
 
 @dataclass(frozen=True)
@@ -169,18 +171,25 @@ class ChatService:
 
             recorder = self._recorder_factory(session_id, run_id)
             runtime = self._runtime_factory.create(recorder=recorder)
+            decider = StreamEventDecider()
+            tracker = StreamLifecycleTracker()
             queue: Queue = Queue()
             done = object()
 
             def on_llm_delta(node: str, text: str) -> None:
-                if node in {"answer", "clarifier_question"}:
-                    queue.put(assistant_delta(session_id, run_id, text, source=node))
-                    return
+                events = decider.llm_delta_events(
+                    session_id=session_id,
+                    run_id=run_id,
+                    node=node,
+                    text=text,
+                    tracker=tracker,
+                )
+                for event in events:
+                    queue.put(event)
 
             def worker():
                 try:
                     answer_emitted = False
-                    clarifier_started_emitted = False
                     last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
                     for state in runtime.run_stream(
                         AgentState(
@@ -191,43 +200,23 @@ class ChatService:
                     ):
                         last_state = state
                         if state.event is not None:
-                            event_type = state.event.event_type
-                            if event_type in {"clarifier.completed", "clarifier.clarification_required"}:
-                                if not clarifier_started_emitted:
-                                    clarifier_started_emitted = True
-                                    queue.put(runtime_event(session_id, run_id, "clarifier.started", {}))
-                                queue.put(
-                                    runtime_event(
-                                        session_id,
-                                        run_id,
-                                        event_type,
-                                        state.event.payload or {},
-                                    )
-                                )
-                        if state.error:
-                            error_message = state.error.get("message", "request failed")
-                            if self._is_clarification(state.error):
-                                queue.put(
-                                    {
-                                        "__terminal__": "clarification",
-                                        "message": error_message,
-                                    }
-                                )
-                                return
-                            failure_type = state.error.get("type", "runtime_error")
-                            queue.put(
-                                {
-                                    "__terminal__": "error",
-                                    "message": error_message,
-                                    "failure_type": failure_type,
-                                    "context": state.error,
-                                }
+                            events = decider.runtime_events(
+                                session_id=session_id,
+                                run_id=run_id,
+                                event_type=state.event.event_type,
+                                payload=state.event.payload or {},
+                                tracker=tracker,
+                                answer_message=state.answer,
                             )
-                            return
-
-                        if state.answer and not answer_emitted:
-                            answer_emitted = True
-                            queue.put({"__terminal__": "answer", "message": state.answer})
+                            for event in events:
+                                queue.put(event)
+                        terminal_item, answer_emitted = terminal_item_from_state(
+                            state=state,
+                            answer_emitted=answer_emitted,
+                            is_clarification=self._is_clarification,
+                        )
+                        if terminal_item is not None:
+                            queue.put(terminal_item)
                             return
 
                     if last_state.answer:
@@ -265,51 +254,25 @@ class ChatService:
                         break
                     continue
                 if isinstance(item, dict) and "__terminal__" in item:
-                    terminal_type = item.get("__terminal__")
-                    message = item.get("message", "")
-                    if terminal_type == "clarification":
-                        self._message_repo.create(
-                            models.Message(
-                                id=str(uuid4()),
-                                session_id=session_id,
-                                role="assistant",
-                                content=message,
-                                created_at=datetime.now(timezone.utc),
-                                metadata_json={"clarification_required": True},
-                            )
+                    persistence, events = terminal_stream_events(
+                        terminal_item=item,
+                        session_id=session_id,
+                        run_id=run_id,
+                        token_emitted=token_emitted,
+                        chunk_text=self._chunk_text,
+                    )
+                    self._message_repo.create(
+                        models.Message(
+                            id=str(uuid4()),
+                            session_id=session_id,
+                            role="assistant",
+                            content=persistence["message"],
+                            created_at=datetime.now(timezone.utc),
+                            metadata_json=persistence["metadata"],
                         )
-                        if not token_emitted:
-                            for chunk in self._chunk_text(message):
-                                yield assistant_delta(session_id, run_id, chunk, source="clarifier")
-                        yield agent_run_completed(session_id, run_id, "clarification_required")
-                    elif terminal_type == "answer":
-                        self._message_repo.create(
-                            models.Message(
-                                id=str(uuid4()),
-                                session_id=session_id,
-                                role="assistant",
-                                content=message,
-                                created_at=datetime.now(timezone.utc),
-                                metadata_json=None,
-                            )
-                        )
-                        if not token_emitted:
-                            yield assistant_delta(session_id, run_id, message, source="answer")
-                        yield agent_run_completed(session_id, run_id)
-                    else:
-                        self._message_repo.create(
-                            models.Message(
-                                id=str(uuid4()),
-                                session_id=session_id,
-                                role="assistant",
-                                content=message,
-                                created_at=datetime.now(timezone.utc),
-                                metadata_json={"error": item.get("context")},
-                            )
-                        )
-                        failure_type = item.get("failure_type", "runtime_error")
-                        yield error_event(session_id, run_id, failure_type, message, item.get("context"))
-                        yield agent_run_failed(session_id, run_id, message, failure_type)
+                    )
+                    for event in events:
+                        yield event
                     break
                 if item is done:
                     break
