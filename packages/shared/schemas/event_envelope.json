@@ -4,21 +4,21 @@
   "title": "EventEnvelope",
   "type": "object",
   "oneOf": [
-    { "$ref": "#/$defs/session_started" },
     { "$ref": "#/$defs/agent_run_started" },
-    { "$ref": "#/$defs/agent_node_started" },
-    { "$ref": "#/$defs/agent_node_completed" },
-    { "$ref": "#/$defs/planner_plan_generated" },
-    { "$ref": "#/$defs/tool_call_started" },
-    { "$ref": "#/$defs/tool_call_completed" },
-    { "$ref": "#/$defs/llm_call_started" },
-    { "$ref": "#/$defs/llm_call_completed" },
-    { "$ref": "#/$defs/rag_retrieval_completed" },
-    { "$ref": "#/$defs/budget_updated" },
-    { "$ref": "#/$defs/agent_run_failed" },
-    { "$ref": "#/$defs/agent_run_completed" },
+    { "$ref": "#/$defs/scope_check_started" },
+    { "$ref": "#/$defs/scope_check_completed" },
+    { "$ref": "#/$defs/scope_check_rejected" },
+    { "$ref": "#/$defs/planner_started" },
+    { "$ref": "#/$defs/planner_completed" },
+    { "$ref": "#/$defs/clarifier_started" },
+    { "$ref": "#/$defs/clarifier_completed" },
+    { "$ref": "#/$defs/clarifier_clarification_required" },
+    { "$ref": "#/$defs/answer_started" },
+    { "$ref": "#/$defs/answer_completed" },
+    { "$ref": "#/$defs/assistant_token_delta" },
     { "$ref": "#/$defs/error_event" },
-    { "$ref": "#/$defs/assistant_token_delta" }
+    { "$ref": "#/$defs/agent_run_failed" },
+    { "$ref": "#/$defs/agent_run_completed" }
   ],
   "$defs": {
     "base": {
@@ -33,23 +33,10 @@
       },
       "additionalProperties": false
     },
-    "session_started": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "session.started" },
-            "payload": {
-              "type": "object",
-              "required": ["session_id"],
-              "properties": {
-                "session_id": { "type": "string" }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
+    "empty_payload": {
+      "type": "object",
+      "maxProperties": 0,
+      "additionalProperties": false
     },
     "agent_run_started": {
       "allOf": [
@@ -59,10 +46,9 @@
             "type": { "const": "agent_run.started" },
             "payload": {
               "type": "object",
-              "required": ["agent_run_id", "config"],
+              "required": ["agent_run_id"],
               "properties": {
-                "agent_run_id": { "type": "string" },
-                "config": { "type": "object" }
+                "agent_run_id": { "type": "string" }
               },
               "additionalProperties": false
             }
@@ -70,17 +56,39 @@
         }
       ]
     },
-    "agent_node_started": {
+    "scope_check_started": {
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
           "properties": {
-            "type": { "const": "agent.node.started" },
+            "type": { "const": "scope_check.started" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "scope_check_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "scope_check.completed" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "scope_check_rejected": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "scope_check.rejected" },
             "payload": {
               "type": "object",
-              "required": ["node_name"],
+              "required": ["response"],
               "properties": {
-                "node_name": { "type": "string" }
+                "response": { "type": "string" }
               },
               "additionalProperties": false
             }
@@ -88,18 +96,61 @@
         }
       ]
     },
-    "agent_node_completed": {
+    "planner_started": {
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
           "properties": {
-            "type": { "const": "agent.node.completed" },
+            "type": { "const": "planner.started" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "planner_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "planner.completed" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "clarifier_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "clarifier.started" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "clarifier_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "clarifier.completed" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "clarifier_clarification_required": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "clarifier.clarification_required" },
             "payload": {
               "type": "object",
-              "required": ["node_name", "status"],
+              "required": ["question"],
               "properties": {
-                "node_name": { "type": "string" },
-                "status": { "type": "string" }
+                "question": { "type": "string" }
               },
               "additionalProperties": false
             }
@@ -107,18 +158,28 @@
         }
       ]
     },
-    "planner_plan_generated": {
+    "answer_started": {
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
           "properties": {
-            "type": { "const": "planner.plan.generated" },
+            "type": { "const": "answer.started" },
+            "payload": { "$ref": "#/$defs/empty_payload" }
+          }
+        }
+      ]
+    },
+    "answer_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "type": { "const": "answer.completed" },
             "payload": {
               "type": "object",
-              "required": ["plan_summary", "step_count"],
+              "required": ["message"],
               "properties": {
-                "plan_summary": { "type": "string" },
-                "step_count": { "type": "integer", "minimum": 0 }
+                "message": { "type": "string" }
               },
               "additionalProperties": false
             }
@@ -126,19 +187,18 @@
         }
       ]
     },
-    "tool_call_started": {
+    "assistant_token_delta": {
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
           "properties": {
-            "type": { "const": "tool.call.started" },
+            "type": { "const": "assistant.token.delta" },
             "payload": {
               "type": "object",
-              "required": ["tool_name", "args_summary", "timeout_ms"],
+              "required": ["text"],
               "properties": {
-                "tool_name": { "type": "string" },
-                "args_summary": { "type": "string" },
-                "timeout_ms": { "type": "integer", "minimum": 0 }
+                "text": { "type": "string" },
+                "source": { "type": "string" }
               },
               "additionalProperties": false
             }
@@ -146,101 +206,19 @@
         }
       ]
     },
-    "tool_call_completed": {
+    "error_event": {
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
           "properties": {
-            "type": { "const": "tool.call.completed" },
+            "type": { "const": "error" },
             "payload": {
               "type": "object",
-              "required": ["tool_name", "status", "latency_ms", "truncated"],
+              "required": ["error_type", "message", "context"],
               "properties": {
-                "tool_name": { "type": "string" },
-                "status": { "type": "string" },
-                "latency_ms": { "type": "integer", "minimum": 0 },
-                "truncated": { "type": "boolean" }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
-    },
-    "llm_call_started": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "llm.call.started" },
-            "payload": {
-              "type": "object",
-              "required": ["model_id", "agent_node"],
-              "properties": {
-                "model_id": { "type": "string" },
-                "agent_node": { "type": "string" }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
-    },
-    "llm_call_completed": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "llm.call.completed" },
-            "payload": {
-              "type": "object",
-              "required": ["model_id", "agent_node", "tokens_input", "tokens_output", "cost_usd", "latency_ms"],
-              "properties": {
-                "model_id": { "type": "string" },
-                "agent_node": { "type": "string" },
-                "tokens_input": { "type": "integer", "minimum": 0 },
-                "tokens_output": { "type": "integer", "minimum": 0 },
-                "cost_usd": { "type": "number", "minimum": 0 },
-                "latency_ms": { "type": "integer", "minimum": 0 }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
-    },
-    "rag_retrieval_completed": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "rag.retrieval.completed" },
-            "payload": {
-              "type": "object",
-              "required": ["retrieved_chunks", "latency_ms"],
-              "properties": {
-                "retrieved_chunks": { "type": "integer", "minimum": 0 },
-                "latency_ms": { "type": "integer", "minimum": 0 }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
-    },
-    "budget_updated": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "budget.updated" },
-            "payload": {
-              "type": "object",
-              "required": ["delta_usd", "total_usd", "remaining_usd"],
-              "properties": {
-                "delta_usd": { "type": "number" },
-                "total_usd": { "type": "number" },
-                "remaining_usd": { "type": "number" }
+                "error_type": { "type": "string" },
+                "message": { "type": "string" },
+                "context": { "type": "object" }
               },
               "additionalProperties": false
             }
@@ -278,44 +256,6 @@
               "required": ["summary"],
               "properties": {
                 "summary": { "type": "string" }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
-    },
-    "error_event": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "error" },
-            "payload": {
-              "type": "object",
-              "required": ["error_type", "message", "context"],
-              "properties": {
-                "error_type": { "type": "string" },
-                "message": { "type": "string" },
-                "context": { "type": "object" }
-              },
-              "additionalProperties": false
-            }
-          }
-        }
-      ]
-    },
-    "assistant_token_delta": {
-      "allOf": [
-        { "$ref": "#/$defs/base" },
-        {
-          "properties": {
-            "type": { "const": "assistant.token.delta" },
-            "payload": {
-              "type": "object",
-              "required": ["text"],
-              "properties": {
-                "text": { "type": "string" }
               },
               "additionalProperties": false
             }
