@@ -1,6 +1,6 @@
 from typing import Iterable, Protocol
 
-from . import models
+from opscopilot_db import models
 
 
 class SessionRepository(Protocol):

@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from opscopilot_db.base import Base
 from opscopilot_db import models
+from opscopilot_db.repositories import MessageRepo, SessionRepo
 
 
 def _make_session():
@@ -32,6 +33,26 @@ def test_session_roundtrip():
     assert loaded.id == "s1"
 
 
+def test_sqlalchemy_session_repository_crud():
+    db = _make_session()
+    repo = SessionRepo(db)
+    session = models.Session(
+        id="s2",
+        created_at=_now(),
+        updated_at=_now(),
+        title="repo",
+    )
+    created = repo.create(session)
+    assert created.id == "s2"
+    assert repo.get("s2") is not None
+    assert len(list(repo.list())) == 1
+    created.title = "updated"
+    repo.update(created)
+    assert repo.get("s2").title == "updated"
+    repo.delete("s2")
+    assert repo.get("s2") is None
+
+
 def test_message_roundtrip():
     db = _make_session()
     db.add(
@@ -56,6 +77,33 @@ def test_message_roundtrip():
     loaded = db.get(models.Message, "m1")
     assert loaded is not None
     assert loaded.id == "m1"
+
+
+def test_sqlalchemy_message_repository_roundtrip():
+    db = _make_session()
+    db.add(
+        models.Session(
+            id="s3",
+            created_at=_now(),
+            updated_at=_now(),
+            title=None,
+        )
+    )
+    db.commit()
+    repo = MessageRepo(db)
+    created = repo.create(
+        models.Message(
+            id="m2",
+            session_id="s3",
+            role="user",
+            content="hello",
+            created_at=_now(),
+            metadata_json=None,
+        )
+    )
+    assert created.id == "m2"
+    assert repo.get("m2") is not None
+    assert len(list(repo.list_by_session("s3"))) == 1
 
 
 def test_agent_run_roundtrip():
