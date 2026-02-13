@@ -86,7 +86,7 @@ def test_prompt_run_persists_steps():
     label_selector = os.getenv("MCP_LABEL_SELECTOR", "")
     result = runtime.run(
         AgentState(
-            prompt="Describe hello pod in default namespace",
+            prompt="List pods in default namespace with label selector app=hello",
             namespace=namespace,
             label_selector=label_selector,
         )

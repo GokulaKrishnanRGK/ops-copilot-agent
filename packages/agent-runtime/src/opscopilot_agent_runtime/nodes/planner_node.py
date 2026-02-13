@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -27,54 +26,19 @@ class Plan:
     steps: list[PlanStep]
 
 
-def _required_fields(schema: dict | None) -> list[str]:
-    if not schema:
-        return []
-    required = schema.get("required")
-    if isinstance(required, list):
-        return [field for field in required if isinstance(field, str)]
-    return []
-
-
-def _build_args_from_state(state: AgentState, schema: dict | None) -> dict:
-    if not schema:
-        return {}
-    props = schema.get("properties", {})
-    args: dict[str, str] = {}
-    if "namespace" in props and state.namespace is not None:
-        args["namespace"] = state.namespace
-    if "label_selector" in props and state.label_selector is not None:
-        args["label_selector"] = state.label_selector
-    return args
-
-
 def plan(state: AgentState, tools: list[MCPTool] | None = None) -> AgentState:
     logger = get_logger(__name__)
     if not tools:
         return state.merge(
             error={"type": "planner_error", "message": "no tools available"},
         )
-    best: tuple[MCPTool, dict, list[str]] | None = None
-    for tool in tools:
-        required = _required_fields(tool.input_schema)
-        args = _build_args_from_state(state, tool.input_schema)
-        if not set(required).issubset(args.keys()):
-            continue
-        if best is None or len(required) > len(best[2]):
-            best = (tool, args, required)
-    if best is None:
-        return state.merge(
-            error={"type": "planner_error", "message": "no compatible tool for state"},
-        )
-    tool, args, required = best
+    tool = tools[0]
     if os.getenv("AGENT_DEBUG") == "1":
         logger.info(
-            "planner fallback selected tool=%s required=%s args=%s",
+            "planner fallback selected tool=%s",
             tool.name,
-            required,
-            json.dumps(args, default=str),
         )
-    plan_obj = Plan(steps=[PlanStep(step_id="step-1", tool_name=tool.name, args=args)])
+    plan_obj = Plan(steps=[PlanStep(step_id="step-1", tool_name=tool.name, args={})])
     event = AgentEvent(event_type="planner.completed", payload={"steps": len(plan_obj.steps)})
     return state.merge(plan=plan_obj, event=event)
 
