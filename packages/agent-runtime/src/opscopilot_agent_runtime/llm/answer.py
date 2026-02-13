@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import uuid
 
@@ -45,6 +46,17 @@ def _response_schema() -> dict:
 
 
 def _tool_summary(tool_results: list) -> str:
+    def sanitize(value):
+        if isinstance(value, str):
+            if len(value) > 400:
+                return "<omitted>"
+            return value
+        if isinstance(value, list):
+            return [sanitize(item) for item in value]
+        if isinstance(value, dict):
+            return {key: sanitize(item) for key, item in value.items()}
+        return value
+
     lines = []
     for result in tool_results:
         tool_name = getattr(result, "tool_name", None)
@@ -52,7 +64,18 @@ def _tool_summary(tool_results: list) -> str:
         if tool_name is None and isinstance(result, dict):
             tool_name = result.get("tool_name")
             tool_result = result.get("result")
-        lines.append(f"tool={tool_name} result={tool_result}")
+        summarized = tool_result
+        if isinstance(tool_result, dict):
+            # Prefer structured content over raw content text to avoid huge log payloads.
+            summarized = tool_result.get("structured_content", tool_result)
+            if isinstance(summarized, dict) and "result" in summarized:
+                result_payload = summarized.get("result")
+                if isinstance(result_payload, dict) and "logs" in result_payload:
+                    result_payload = dict(result_payload)
+                    result_payload["logs"] = "<omitted>"
+                    summarized = dict(summarized)
+                    summarized["result"] = result_payload
+        lines.append(f"tool={tool_name} result={json.dumps(sanitize(summarized), default=str)}")
     return "\n".join(lines)
 
 
@@ -88,7 +111,10 @@ class AnswerSynthesizer(LlmNodeBase):
         rag_context: str | None = None,
         recorder: AgentRunRecorder | None = None,
     ) -> str:
-        system_prompt = "Return a concise answer grounded only in tool results."
+        system_prompt = (
+            "Return a concise answer grounded only in tool results. "
+            "Do not quote full logs; summarize them in one short sentence."
+        )
         context_block = f"\n\nContext:\n{rag_context}" if rag_context else ""
         user_content = (
             f"Prompt: {prompt}{context_block}\n\nTool results:\n{_tool_summary(tool_results)}"

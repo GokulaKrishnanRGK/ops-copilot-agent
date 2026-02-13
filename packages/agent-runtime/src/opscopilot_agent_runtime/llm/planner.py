@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
 import uuid
-from dataclasses import dataclass
-from typing import Any
 
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
@@ -24,12 +23,6 @@ from .base import LlmNodeBase
 
 if TYPE_CHECKING:
     from opscopilot_agent_runtime.nodes.planner_node import Plan, PlanStep
-
-
-@dataclass(frozen=True)
-class PlanStepSpec:
-    tool_name: str
-    args: dict[str, Any]
 
 
 def _read_env(name: str) -> str:
@@ -57,21 +50,13 @@ def _plan_schema() -> dict:
                     "type": "object",
                     "properties": {
                         "tool_name": {"type": "string"},
-                        "args": {"type": "object"},
                     },
-                    "required": ["tool_name", "args"],
+                    "required": ["tool_name"],
                 },
             }
         },
         "required": ["steps"],
     }
-
-
-def _tools_prompt(tools: list[str]) -> str:
-    joined = "\n".join(f"- {name}" for name in tools)
-    return f"Available tools:\n{joined}"
-
-
 
 
 class LlmPlanner(LlmNodeBase):
@@ -116,7 +101,7 @@ class LlmPlanner(LlmNodeBase):
                 LlmMessage(role="system", content=system_prompt),
                 LlmMessage(
                     role="user",
-                    content=f"{prompt}\n\n{_tools_prompt(tool_names)}",
+                    content=json.dumps({"prompt": prompt, "tools": tool_names}),
                 ),
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_plan_schema()),
@@ -138,10 +123,9 @@ class LlmPlanner(LlmNodeBase):
         steps = []
         for item in payload.get("steps", []):
             tool_name = item.get("tool_name")
-            args = item.get("args")
-            if not tool_name or not isinstance(args, dict):
+            if not tool_name:
                 continue
-            steps.append(PlanStep(step_id=str(uuid.uuid4()), tool_name=tool_name, args=args))
+            steps.append(PlanStep(step_id=str(uuid.uuid4()), tool_name=tool_name, args={}))
         if not steps:
             return Plan(steps=[])
         return Plan(steps=steps)

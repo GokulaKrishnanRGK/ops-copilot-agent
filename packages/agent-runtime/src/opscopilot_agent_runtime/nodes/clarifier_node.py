@@ -7,6 +7,30 @@ from opscopilot_agent_runtime.nodes.planner_node import Plan, PlanStep
 from opscopilot_agent_runtime.state import AgentState
 
 
+def _required_fields(schema: dict | None) -> set[str]:
+    if not schema:
+        return set()
+    required = schema.get("required")
+    if not isinstance(required, list):
+        return set()
+    return {field for field in required if isinstance(field, str)}
+
+
+def _allowed_fields(schema: dict | None) -> set[str]:
+    if not schema:
+        return set()
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return set()
+    return {field for field in properties.keys() if isinstance(field, str)}
+
+
+def _safe_clarify_message(question: str | None) -> str:
+    if question:
+        return question
+    return "I need one more detail to continue. Could you clarify the missing information?"
+
+
 class ClarifierNode:
     def __init__(self, clarifier: LlmClarifier | None = None) -> None:
         self._clarifier = clarifier
@@ -34,7 +58,7 @@ class ClarifierNode:
             )
         payload = self._clarifier.clarify(state, tool_payload)
         if payload.get("action") == "clarify":
-            question = payload.get("clarify_question") or "clarification required"
+            question = _safe_clarify_message(payload.get("clarify_question"))
             return state.merge(
                 error={
                     "type": "clarification_required",
@@ -43,10 +67,7 @@ class ClarifierNode:
             )
         missing_fields = payload.get("missing_fields")
         if isinstance(missing_fields, list) and missing_fields:
-            question = payload.get("clarify_question")
-            if not question:
-                missing = ", ".join(str(field) for field in missing_fields)
-                question = f"Please provide values for: {missing}."
+            question = _safe_clarify_message(payload.get("clarify_question"))
             return state.merge(
                 error={
                     "type": "clarification_required",
@@ -67,4 +88,32 @@ class ClarifierNode:
                     "message": "clarifier returned no steps",
                 }
             )
+        tool_map = {tool.name: tool for tool in tools}
+        for step in steps:
+            tool = tool_map.get(step.tool_name)
+            if tool is None:
+                return state.merge(
+                    error={
+                        "type": "clarification_required",
+                        "message": f"Unknown tool in clarification result: {step.tool_name}",
+                    }
+                )
+            required = _required_fields(tool.input_schema)
+            allowed = _allowed_fields(tool.input_schema)
+            missing = sorted(field for field in required if field not in step.args)
+            extra = sorted(field for field in step.args.keys() if field not in allowed)
+            if missing:
+                return state.merge(
+                    error={
+                        "type": "clarification_required",
+                        "message": _safe_clarify_message(None),
+                    }
+                )
+            if extra:
+                return state.merge(
+                    error={
+                        "type": "clarification_required",
+                        "message": "I found extra details that do not apply to this request. Please rephrase with only the needed details.",
+                    }
+                )
         return state.merge(plan=Plan(steps=steps))

@@ -50,7 +50,7 @@ def test_llm_planner_builds_plan():
     planner = _planner()
     plan = planner.plan("check pods", ["k8s.list_pods"])
     assert plan.steps[0].tool_name == "k8s.list_pods"
-    assert plan.steps[0].args["namespace"] == "default"
+    assert plan.steps[0].args == {}
 
 
 def test_llm_planner_records_calls():

@@ -22,3 +22,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/integration"]
+markers = [
+    "integration: marks tests as integration",
+]
