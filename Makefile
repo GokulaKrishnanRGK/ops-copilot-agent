@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down rag-ingest
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down rag-ingest run-api run-tool-server run-local
 
 build:
 	cd apps/web && npm run build
@@ -85,3 +85,18 @@ opensearch-down:
 
 rag-ingest:
 	opscopilot-rag-ingest --root packages/rag/sample_docs --extensions .md,.txt
+
+run-api:
+	cd apps/api && uvicorn opscopilot_api.main:app --host 0.0.0.0 --port $${API_PORT:-8000} --reload
+
+run-tool-server:
+	cd apps/tool-server && TOOL_SERVER_ADDR=":$${TOOL_SERVER_PORT:-8080}" go run ./cmd/tool-server
+
+run-local:
+	@set -e; \
+	( cd apps/tool-server && TOOL_SERVER_ADDR=":$${TOOL_SERVER_PORT:-8080}" go run ./cmd/tool-server ) & \
+	tool_pid=$$!; \
+	( cd apps/api && uvicorn opscopilot_api.main:app --host 0.0.0.0 --port $${API_PORT:-8000} --reload ) & \
+	api_pid=$$!; \
+	trap 'kill $$tool_pid $$api_pid 2>/dev/null || true' INT TERM EXIT; \
+	wait $$tool_pid $$api_pid
