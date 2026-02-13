@@ -25,11 +25,14 @@ services:
     environment:
       TOOL_SERVER_ADDR: ":8080"
       TOOL_SERVER_DEBUG: "${TOOL_SERVER_DEBUG:-0}"
+      TOOL_SERVER_LOG_FILE: "${TOOL_SERVER_LOG_FILE}"
+      TZ: "${TZ:-America/Los_Angeles}"
       KUBECONFIG_PATH: "/kube/config"
       K8S_ALLOWED_NAMESPACES: "${K8S_ALLOWED_NAMESPACES}"
       K8S_INSECURE_SKIP_TLS_VERIFY: "1"
     volumes:
       - "${KUBECONFIG_PATH}:/kube/config:ro"
+      - "${LOGS_HOST_PATH}:${LOGS_HOST_PATH}"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 2s
