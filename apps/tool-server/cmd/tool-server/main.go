@@ -9,6 +9,8 @@ import (
 )
 
 func main() {
+	configureLogging()
+
 	addr := os.Getenv("TOOL_SERVER_ADDR")
 	if addr == "" {
 		addr = ":8080"
