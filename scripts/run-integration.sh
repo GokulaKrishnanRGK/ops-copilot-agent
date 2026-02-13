@@ -25,6 +25,18 @@ if [ -z "${OPENSEARCH_URL:-}" ]; then
   echo "integration: OPENSEARCH_URL is required for integration tests" >&2
   exit 1
 fi
+if [ -z "${LOGS_HOST_PATH:-}" ]; then
+  echo "integration: LOGS_HOST_PATH is required for integration tests" >&2
+  exit 1
+fi
+if [ -z "${TOOL_SERVER_LOG_FILE:-}" ]; then
+  echo "integration: TOOL_SERVER_LOG_FILE is required for integration tests" >&2
+  exit 1
+fi
+if [ -z "${API_LOG_FILE:-}" ]; then
+  echo "integration: API_LOG_FILE is required for integration tests" >&2
+  exit 1
+fi
 
 cluster_name="opscopilot-test"
 if ! kind get clusters | grep -q "^${cluster_name}$"; then
@@ -85,6 +97,11 @@ export TOOL_SERVER_DEBUG="${TOOL_SERVER_DEBUG:-0}"
 export RUN_MCP_INTEGRATION="1"
 export MCP_NAMESPACE="${MCP_NAMESPACE:-default}"
 export MCP_LABEL_SELECTOR="${MCP_LABEL_SELECTOR:-}"
+mkdir -p "${LOGS_HOST_PATH}" "$(dirname "${API_LOG_FILE}")"
+export TEST_LOG_ROOT="${TEST_LOG_ROOT:-/Volumes/Work/Projects/logs/opscopilot/tests}"
+TEST_RUN_DIR="$(TEST_LOG_ROOT="${TEST_LOG_ROOT}" bash "$repo_root/scripts/new-test-run-dir.sh")"
+export TEST_RUN_DIR
+echo "integration: test logs dir ${TEST_RUN_DIR}"
 if [ -n "${OPENAI_API_KEY:-}" ]; then
   export LLM_EMBEDDING_PROVIDER="${LLM_EMBEDDING_PROVIDER:-openai}"
 fi
@@ -147,42 +164,56 @@ pytest_args=()
 if [ "${AGENT_DEBUG:-0}" = "1" ]; then
   pytest_args+=("--log-cli-level=INFO")
 fi
-MCP_NAMESPACE="$MCP_NAMESPACE" MCP_LABEL_SELECTOR="$MCP_LABEL_SELECTOR" pytest "${pytest_args[@]}" tests/integration
+TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" MCP_NAMESPACE="$MCP_NAMESPACE" MCP_LABEL_SELECTOR="$MCP_LABEL_SELECTOR" \
+  bash "$repo_root/scripts/run-test-logged.sh" agent-runtime-integration -- pytest "${pytest_args[@]}" tests/integration
 status=$?
 summary+=("agent-runtime:integration=$status")
 set -e
 
 if [ $status -eq 0 ]; then
+  cd "$repo_root/apps/api"
+  TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" \
+    bash "$repo_root/scripts/run-test-logged.sh" api-integration -- pytest "${pytest_args[@]}" -m integration
+  status=$?
+  summary+=("api:integration=$status")
+fi
+
+if [ $status -eq 0 ]; then
   cd "$repo_root/packages/rag"
-  pytest -m integration
+  TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" \
+    bash "$repo_root/scripts/run-test-logged.sh" rag-integration -- pytest "${pytest_args[@]}" -m integration
   status=$?
   summary+=("rag:integration=$status")
 fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/llm-gateway"
-  pytest
+  TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" \
+    bash "$repo_root/scripts/run-test-logged.sh" llm-gateway-integration -- pytest "${pytest_args[@]}"
   status=$?
   summary+=("llm-gateway=$status")
 fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/db"
-  pytest
+  TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" \
+    bash "$repo_root/scripts/run-test-logged.sh" db-integration -- pytest "${pytest_args[@]}"
   status=$?
   summary+=("db=$status")
 fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/apps/tool-server"
-  go test ./...
+  TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" \
+    bash "$repo_root/scripts/run-test-logged.sh" tool-server-integration -- go test ./...
   status=$?
   summary+=("tool-server=$status")
 fi
 
 if [ $status -eq 0 ]; then
   cd "$repo_root/packages/tools"
-  pytest
+  TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" \
+    bash "$repo_root/scripts/run-test-logged.sh" tools-integration -- pytest "${pytest_args[@]}"
   status=$?
   summary+=("tools=$status")
 fi
