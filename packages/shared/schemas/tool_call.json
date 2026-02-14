@@ -13,6 +13,7 @@
     "latency_ms": { "type": "integer", "minimum": 0 },
     "bytes_returned": { "type": "integer", "minimum": 0 },
     "truncated": { "type": "boolean" },
+    "result_json": { "type": ["object", "null"] },
     "error_message": { "type": ["string", "null"] },
     "created_at": { "type": "string", "format": "date-time" }
   },

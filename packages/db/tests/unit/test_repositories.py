@@ -201,6 +201,7 @@ def test_tool_call_roundtrip():
         latency_ms=10,
         bytes_returned=0,
         truncated=False,
+        result_json=None,
         error_message=None,
         created_at=_now(),
     )

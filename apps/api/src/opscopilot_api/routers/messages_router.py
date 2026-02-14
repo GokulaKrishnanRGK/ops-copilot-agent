@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -16,10 +18,18 @@ def get_message_service(db: Session = Depends(get_db)) -> MessageService:
 @router.get("", response_model=MessageListResponse)
 def list_messages(
     session_id: str = Query(...),
+    limit: int | None = Query(default=None, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    order: Literal["asc", "desc"] = Query(default="asc"),
     service: MessageService = Depends(get_message_service),
 ) -> MessageListResponse:
     try:
-        items = service.list_by_session(session_id)
+        items = service.list_by_session(
+            session_id,
+            limit=limit,
+            offset=offset,
+            descending=order == "desc",
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return MessageListResponse(items=[MessageResponse.model_validate(item) for item in items])

@@ -11,6 +11,7 @@ from .sqlalchemy.budget_event_repo import BudgetEventRepo
 from .sqlalchemy.llm_call_repo import LlmCallRepo
 from .sqlalchemy.message_repo import MessageRepo
 from .sqlalchemy.session_repo import SessionRepo
+from .sqlalchemy.tool_call_repo import ToolCallRepo
 
 __all__ = [
     "SessionRepository",
@@ -24,4 +25,5 @@ __all__ = [
     "AgentRunRepo",
     "LlmCallRepo",
     "BudgetEventRepo",
+    "ToolCallRepo",
 ]

@@ -61,6 +61,7 @@ class ToolCall(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     bytes_returned: Mapped[int] = mapped_column(Integer, nullable=False)
     truncated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    result_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
 

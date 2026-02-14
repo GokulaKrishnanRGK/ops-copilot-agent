@@ -126,6 +126,22 @@ class AnswerCompletedEvent(StreamEventBase):
     payload: AnswerCompletedPayload
 
 
+class ToolLogsAvailablePayloadItem(BaseModel):
+    step_id: str
+    tool_name: str
+    text: str
+    truncated: bool
+
+
+class ToolLogsAvailablePayload(BaseModel):
+    items: list[ToolLogsAvailablePayloadItem]
+
+
+class ToolLogsAvailableEvent(StreamEventBase):
+    type: Literal["tool.logs.available"]
+    payload: ToolLogsAvailablePayload
+
+
 ChatStreamEvent = (
     AgentRunStartedEvent
     | AgentRunCompletedEvent
@@ -142,4 +158,5 @@ ChatStreamEvent = (
     | ClarifierClarificationRequiredEvent
     | AnswerStartedEvent
     | AnswerCompletedEvent
+    | ToolLogsAvailableEvent
 )

@@ -1,8 +1,9 @@
-import { FormEvent, ReactNode, RefObject } from "react";
+import { FormEvent, ReactNode, RefObject, UIEvent } from "react";
+import { LogEntry } from "./LogEntry";
 
 export type RenderMessage = {
   id: string;
-  role: "user" | "assistant" | "event";
+  role: "user" | "assistant" | "event" | "log";
   text: string;
 };
 
@@ -22,6 +23,7 @@ type ChatPanelProps = {
   disabled: boolean;
   error: string;
   messagesContainerRef: RefObject<HTMLDivElement>;
+  onMessagesScroll: (event: UIEvent<HTMLDivElement>) => void;
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
 };
@@ -36,6 +38,7 @@ export function ChatPanel({
   disabled,
   error,
   messagesContainerRef,
+  onMessagesScroll,
   onInputChange,
   onSubmit,
 }: ChatPanelProps) {
@@ -46,10 +49,14 @@ export function ChatPanel({
         <span>{activeSessionLabel}</span>
       </div>
       {summary}
-      <div className="messages" ref={messagesContainerRef}>
+      <div className="messages" ref={messagesContainerRef} onScroll={onMessagesScroll}>
         {messages.map((message) => (
           <div key={message.id} className={`message-row ${message.role}`}>
-            <p className={`message-text ${message.role}`}>{message.text}</p>
+            {message.role === "log" ? (
+              <LogEntry text={message.text} />
+            ) : (
+              <p className={`message-text ${message.role}`}>{message.text}</p>
+            )}
           </div>
         ))}
         {liveEvent ? (
