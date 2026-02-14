@@ -67,13 +67,16 @@ class ChatService:
             if not pending_user_prompt:
                 continue
             metadata = message.metadata_json if isinstance(message.metadata_json, dict) else {}
-            error = metadata.get("error") if isinstance(metadata, dict) else None
-            is_out_of_scope = isinstance(error, dict) and error.get("type") == "out_of_scope"
-            if not is_out_of_scope:
+            error = metadata.get("error")
+            is_clarification = bool(metadata.get("clarification_required")) or (
+                isinstance(error, dict) and error.get("type") == "clarification_required"
+            )
+            if is_clarification:
                 history.append(pending_user_prompt)
+            else:
+                # A non-clarification assistant response closes any prior clarification chain.
+                history = []
             pending_user_prompt = None
-        if pending_user_prompt:
-            history.append(pending_user_prompt)
         return history
 
     @staticmethod
