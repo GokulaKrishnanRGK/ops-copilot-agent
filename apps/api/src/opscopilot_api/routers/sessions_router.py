@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -42,9 +42,11 @@ def create_session(
 
 @router.get("", response_model=SessionListResponse)
 def list_sessions(
+    limit: int | None = Query(default=None, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     service: SessionService = Depends(get_session_service),
 ) -> SessionListResponse:
-    items = [SessionResponse.model_validate(item) for item in service.list()]
+    items = [SessionResponse.model_validate(item) for item in service.list(limit=limit, offset=offset)]
     return SessionListResponse(items=items)
 
 
