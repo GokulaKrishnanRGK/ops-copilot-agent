@@ -22,6 +22,56 @@ export type MessageListResponse = {
   items: Message[];
 };
 
+export type UsageMetrics = {
+  tokens_input: number;
+  tokens_output: number;
+  tokens_total: number;
+  cost_usd: number;
+  llm_call_count: number;
+};
+
+export type BudgetMetrics = {
+  total_usd: number;
+  delta_usd: number;
+  event_count: number;
+};
+
+export type NodeUsage = {
+  agent_node: string;
+  tokens_input: number;
+  tokens_output: number;
+  tokens_total: number;
+  cost_usd: number;
+  llm_call_count: number;
+};
+
+export type RunMetrics = {
+  usage: UsageMetrics;
+  budget: BudgetMetrics;
+  node_usage: NodeUsage[];
+};
+
+export type Run = {
+  id: string;
+  session_id: string;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  config_json: Record<string, unknown>;
+  metrics: RunMetrics;
+};
+
+export type SessionMetrics = {
+  usage: UsageMetrics;
+  budget: BudgetMetrics;
+  run_count: number;
+};
+
+export type RunListResponse = {
+  items: Run[];
+  session_metrics: SessionMetrics;
+};
+
 export type ChatEvent = {
   type: string;
   timestamp: string;

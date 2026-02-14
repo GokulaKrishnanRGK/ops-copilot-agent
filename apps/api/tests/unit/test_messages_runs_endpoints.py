@@ -66,6 +66,9 @@ def test_messages_and_runs_list_by_session(client: TestClient, app, testing_sess
 
         runs_resp = client.get("/api/runs", params={"session_id": session_id})
         assert runs_resp.status_code == 200
-        assert isinstance(runs_resp.json()["items"], list)
+        payload = runs_resp.json()
+        assert isinstance(payload["items"], list)
+        assert "session_metrics" in payload
+        assert payload["session_metrics"]["run_count"] >= 1
     finally:
         app.dependency_overrides.pop(get_chat_service, None)
