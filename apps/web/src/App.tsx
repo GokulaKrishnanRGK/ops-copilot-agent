@@ -2,8 +2,11 @@ import { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from "react"
 import { ChatPanel, LiveEvent, RenderMessage } from "./components/ChatPanel";
 import { SessionsPanel } from "./components/SessionsPanel";
 import { ThemeSelector } from "./components/ThemeSelector";
+import { UsageDetailsModal } from "./components/UsageDetailsModal";
+import { UsageSummary } from "./components/UsageSummary";
 import { streamChat } from "./lib/sse";
 import { useListMessagesQuery } from "./store/api/messageApi";
+import { useListRunsQuery } from "./store/api/runApi";
 import {
   sessionStreamUrl,
   useCreateSessionMutation,
@@ -11,7 +14,7 @@ import {
   useLazyListSessionsQuery,
   useRenameSessionMutation,
 } from "./store/api/sessionApi";
-import { ChatEvent, Message, Session, ThemeMode } from "./types";
+import { ChatEvent, Message, NodeUsage, Session, ThemeMode } from "./types";
 
 const THEME_STORAGE_KEY = "opscopilot-theme-mode";
 const SESSION_SCROLL_BATCH_SIZE = 5;
@@ -110,6 +113,7 @@ export function App() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showUsageDetails, setShowUsageDetails] = useState<boolean>(false);
   const [streamMessages, setStreamMessages] = useState<RenderMessage[]>([]);
   const [liveEvent, setLiveEvent] = useState<LiveEvent | null>(null);
   const [error, setError] = useState<string>("");
@@ -124,6 +128,18 @@ export function App() {
   });
 
   const { data: persistedMessages = [], error: messagesError } = useListMessagesQuery(
+    { sessionId: activeSessionId },
+    {
+      skip: !activeSessionId,
+      refetchOnMountOrArgChange: true,
+    }
+  );
+  const {
+    data: runsData,
+    error: runsError,
+    isFetching: isFetchingRuns,
+    refetch: refetchRuns,
+  } = useListRunsQuery(
     { sessionId: activeSessionId },
     {
       skip: !activeSessionId,
@@ -154,6 +170,7 @@ export function App() {
     setOpenMenuSessionId("");
     setStreamMessages([]);
     setLiveEvent(null);
+    setShowUsageDetails(false);
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -208,6 +225,29 @@ export function App() {
     const persisted = persistedMessages.map(mapPersistedMessage);
     return [...persisted, ...streamMessages];
   }, [persistedMessages, streamMessages]);
+  const latestRun = useMemo(() => runsData?.items[0] ?? null, [runsData]);
+  const sessionNodeUsage = useMemo<NodeUsage[]>(() => {
+    const items = runsData?.items ?? [];
+    const nodeMap = new Map<string, NodeUsage>();
+    for (const run of items) {
+      for (const node of run.metrics.node_usage) {
+        const existing = nodeMap.get(node.agent_node);
+        if (!existing) {
+          nodeMap.set(node.agent_node, { ...node });
+          continue;
+        }
+        nodeMap.set(node.agent_node, {
+          agent_node: node.agent_node,
+          tokens_input: existing.tokens_input + node.tokens_input,
+          tokens_output: existing.tokens_output + node.tokens_output,
+          tokens_total: existing.tokens_total + node.tokens_total,
+          cost_usd: existing.cost_usd + node.cost_usd,
+          llm_call_count: existing.llm_call_count + node.llm_call_count,
+        });
+      }
+    }
+    return Array.from(nodeMap.values()).sort((a, b) => b.cost_usd - a.cost_usd);
+  }, [runsData]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -219,7 +259,8 @@ export function App() {
 
   const sessionsErrorMessage = sessionsError ? "list sessions failed" : "";
   const messagesErrorMessage = messagesError ? "list messages failed" : "";
-  const displayError = error || sessionsErrorMessage || messagesErrorMessage;
+  const runsErrorMessage = runsError ? "list runs failed" : "";
+  const displayError = error || sessionsErrorMessage || messagesErrorMessage || runsErrorMessage;
 
   async function loadSessionsPage(options: {
     offset: number;
@@ -422,6 +463,7 @@ export function App() {
       setLiveEvent(null);
     } finally {
       setLoading(false);
+      void refetchRuns();
     }
   }
 
@@ -467,6 +509,16 @@ export function App() {
           activeSessionLabel={
             activeSession ? activeSession.title || activeSession.id : "No session selected"
           }
+          summary={
+            <UsageSummary
+              sessionMetrics={runsData?.sessionMetrics ?? null}
+              latestRun={latestRun}
+              loading={isFetchingRuns}
+              onOpenDetails={() => {
+                setShowUsageDetails(true);
+              }}
+            />
+          }
           messages={chatMessages}
           liveEvent={liveEvent}
           input={input}
@@ -480,6 +532,14 @@ export function App() {
           }}
         />
       </main>
+      <UsageDetailsModal
+        isOpen={showUsageDetails}
+        latestRun={latestRun}
+        sessionNodeUsage={sessionNodeUsage}
+        onClose={() => {
+          setShowUsageDetails(false);
+        }}
+      />
     </div>
   );
 }

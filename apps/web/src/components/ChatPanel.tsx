@@ -1,4 +1,4 @@
-import { FormEvent, RefObject } from "react";
+import { FormEvent, ReactNode, RefObject } from "react";
 
 export type RenderMessage = {
   id: string;
@@ -14,6 +14,7 @@ export type LiveEvent = {
 
 type ChatPanelProps = {
   activeSessionLabel: string;
+  summary: ReactNode;
   messages: RenderMessage[];
   liveEvent: LiveEvent | null;
   input: string;
@@ -27,6 +28,7 @@ type ChatPanelProps = {
 
 export function ChatPanel({
   activeSessionLabel,
+  summary,
   messages,
   liveEvent,
   input,
@@ -43,6 +45,7 @@ export function ChatPanel({
         <h2>Chat</h2>
         <span>{activeSessionLabel}</span>
       </div>
+      {summary}
       <div className="messages" ref={messagesContainerRef}>
         {messages.map((message) => (
           <div key={message.id} className={`message-row ${message.role}`}>

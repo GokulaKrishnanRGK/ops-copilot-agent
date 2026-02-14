@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from opscopilot_db.base import Base
 from opscopilot_db import models
-from opscopilot_db.repositories import MessageRepo, SessionRepo
+from opscopilot_db.repositories import BudgetEventRepo, LlmCallRepo, MessageRepo, SessionRepo
 
 
 def _make_session():
@@ -244,3 +244,72 @@ def test_budget_event_roundtrip():
     db.commit()
     loaded = db.query(models.BudgetEvent).filter(models.BudgetEvent.agent_run_id == "r1").all()
     assert len(loaded) == 1
+
+
+def test_sqlalchemy_llm_call_repository_roundtrip():
+    db = _make_session()
+    db.add(models.Session(id="s10", created_at=_now(), updated_at=_now(), title=None))
+    db.add(
+        models.AgentRun(
+            id="r10",
+            session_id="s10",
+            started_at=_now(),
+            ended_at=None,
+            status="completed",
+            config_json={},
+        )
+    )
+    db.commit()
+
+    repo = LlmCallRepo(db)
+    repo.create(
+        models.LlmCall(
+            id="c10",
+            agent_run_id="r10",
+            agent_node="planner",
+            model_id="m1",
+            tokens_input=5,
+            tokens_output=7,
+            cost_usd=0.02,
+            latency_ms=12,
+            created_at=_now(),
+            metadata_json=None,
+        )
+    )
+
+    loaded = list(repo.list_by_run("r10"))
+    assert len(loaded) == 1
+    assert loaded[0].agent_node == "planner"
+
+
+def test_sqlalchemy_budget_event_repository_roundtrip():
+    db = _make_session()
+    db.add(models.Session(id="s11", created_at=_now(), updated_at=_now(), title=None))
+    db.add(
+        models.AgentRun(
+            id="r11",
+            session_id="s11",
+            started_at=_now(),
+            ended_at=None,
+            status="completed",
+            config_json={},
+        )
+    )
+    db.commit()
+
+    repo = BudgetEventRepo(db)
+    repo.create(
+        models.BudgetEvent(
+            id="b10",
+            agent_run_id="r11",
+            kind="llm_cost",
+            delta_usd=0.02,
+            total_usd=0.12,
+            created_at=_now(),
+            metadata_json=None,
+        )
+    )
+
+    loaded = list(repo.list_by_run("r11"))
+    assert len(loaded) == 1
+    assert float(loaded[0].total_usd) == 0.12
