@@ -18,8 +18,11 @@ class SessionRepo:
     def get(self, session_id: str) -> models.Session | None:
         return self._db.query(models.Session).filter(models.Session.id == session_id).one_or_none()
 
-    def list(self) -> Iterable[models.Session]:
-        return self._db.query(models.Session).order_by(models.Session.created_at.desc()).all()
+    def list(self, limit: int | None = None, offset: int = 0) -> Iterable[models.Session]:
+        query = self._db.query(models.Session).order_by(models.Session.created_at.desc()).offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
 
     def update(self, session: models.Session) -> models.Session:
         self._db.add(session)

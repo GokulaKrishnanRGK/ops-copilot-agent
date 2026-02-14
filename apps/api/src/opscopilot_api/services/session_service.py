@@ -18,8 +18,8 @@ class SessionService:
         )
         return self._repo.create(record)
 
-    def list(self) -> list[models.Session]:
-        return list(self._repo.list())
+    def list(self, limit: int | None = None, offset: int = 0) -> list[models.Session]:
+        return list(self._repo.list(limit=limit, offset=offset))
 
     def get(self, session_id: str) -> models.Session | None:
         return self._repo.get(session_id)
