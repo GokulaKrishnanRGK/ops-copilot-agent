@@ -1,4 +1,4 @@
-from typing import Iterable, Protocol
+from typing import Iterable, Protocol, Sequence
 
 from opscopilot_db import models
 
@@ -20,7 +20,13 @@ class MessageRepository(Protocol):
 
     def get(self, message_id: str) -> models.Message | None: ...
 
-    def list_by_session(self, session_id: str) -> Iterable[models.Message]: ...
+    def list_by_session(
+        self,
+        session_id: str,
+        limit: int | None = None,
+        offset: int = 0,
+        descending: bool = False,
+    ) -> Iterable[models.Message]: ...
 
 
 class AgentRunRepository(Protocol):
@@ -43,6 +49,8 @@ class ToolCallRepository(Protocol):
     def create(self, tool_call: models.ToolCall) -> models.ToolCall: ...
 
     def list_by_run(self, agent_run_id: str) -> Iterable[models.ToolCall]: ...
+
+    def list_by_runs(self, agent_run_ids: Sequence[str]) -> Iterable[models.ToolCall]: ...
 
 
 class BudgetEventRepository(Protocol):

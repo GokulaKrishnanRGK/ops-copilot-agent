@@ -72,6 +72,23 @@ export type RunListResponse = {
   session_metrics: SessionMetrics;
 };
 
+export type ToolCall = {
+  id: string;
+  agent_run_id: string;
+  tool_name: string;
+  status: string;
+  latency_ms: number;
+  bytes_returned: number;
+  truncated: boolean;
+  error_message: string | null;
+  created_at: string;
+  log_text: string | null;
+};
+
+export type ToolCallListResponse = {
+  items: ToolCall[];
+};
+
 export type ChatEvent = {
   type: string;
   timestamp: string;

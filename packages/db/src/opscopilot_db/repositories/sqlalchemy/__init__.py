@@ -3,5 +3,6 @@ from .budget_event_repo import BudgetEventRepo
 from .llm_call_repo import LlmCallRepo
 from .message_repo import MessageRepo
 from .session_repo import SessionRepo
+from .tool_call_repo import ToolCallRepo
 
-__all__ = ["SessionRepo", "MessageRepo", "AgentRunRepo", "LlmCallRepo", "BudgetEventRepo"]
+__all__ = ["SessionRepo", "MessageRepo", "AgentRunRepo", "LlmCallRepo", "BudgetEventRepo", "ToolCallRepo"]

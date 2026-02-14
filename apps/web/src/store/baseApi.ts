@@ -7,5 +7,5 @@ export const baseApi = createApi({
     baseUrl: webConfig.apiBaseUrl,
   }),
   endpoints: () => ({}),
-  tagTypes: ["Sessions", "Messages", "Runs"],
+  tagTypes: ["Sessions", "Messages", "Runs", "ToolCalls"],
 });

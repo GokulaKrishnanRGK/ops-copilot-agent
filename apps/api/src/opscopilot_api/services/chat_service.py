@@ -12,6 +12,7 @@ from opscopilot_db import models, repositories
 from .event_mapper import (
     agent_run_completed,
     agent_run_started,
+    runtime_event,
 )
 from .runtime_factory import RuntimeFactory
 from .stream_decisions import (
@@ -98,11 +99,52 @@ class ChatService:
             chunks.append(current)
         return chunks
 
+    @staticmethod
+    def _tool_log_events(session_id: str, run_id: str, tool_results: list | None) -> list[dict]:
+        if not tool_results:
+            return []
+        items: list[dict] = []
+        for result in tool_results:
+            tool_name = getattr(result, "tool_name", None)
+            if not isinstance(tool_name, str) or tool_name != "k8s.get_pod_logs":
+                continue
+            tool_response = getattr(result, "result", None)
+            if not isinstance(tool_response, dict):
+                continue
+            structured = tool_response.get("structured_content")
+            if not isinstance(structured, dict):
+                continue
+            payload = structured.get("result")
+            if not isinstance(payload, dict):
+                continue
+            text = payload.get("text")
+            if not isinstance(text, str) or not text.strip():
+                fallback = payload.get("logs")
+                if isinstance(fallback, str) and fallback.strip():
+                    text = fallback
+                else:
+                    continue
+            step_id = getattr(result, "step_id", "")
+            if not isinstance(step_id, str):
+                step_id = ""
+            items.append(
+                {
+                    "step_id": step_id,
+                    "tool_name": tool_name,
+                    "text": text,
+                    "truncated": bool(structured.get("truncated")),
+                }
+            )
+        if not items:
+            return []
+        return [runtime_event(session_id, run_id, "tool.logs.available", {"items": items})]
+
     def run(self, session_id: str, prompt: str) -> ChatResult:
         session = self._session_repo.get(session_id)
         if session is None:
             raise SessionNotFoundError("session not found")
 
+        run_id = str(uuid4())
         prompt_history = self._load_prompt_history(session_id)
         now = datetime.now(timezone.utc)
         self._message_repo.create(
@@ -112,11 +154,9 @@ class ChatService:
                 role="user",
                 content=prompt,
                 created_at=now,
-                metadata_json=None,
+                metadata_json={"run_id": run_id},
             )
         )
-
-        run_id = str(uuid4())
         recorder = self._recorder_factory(session_id, run_id)
         runtime = self._runtime_factory.create(recorder=recorder)
         try:
@@ -128,6 +168,17 @@ class ChatService:
         if answer_text is None and result.error:
             answer_text = result.error.get("message", "request failed")
         clarification = self._is_clarification(result.error)
+        assistant_metadata: dict | None
+        if clarification:
+            assistant_metadata = {"clarification_required": True}
+        elif result.error:
+            assistant_metadata = {"error": result.error}
+        else:
+            assistant_metadata = None
+        if assistant_metadata is None:
+            assistant_metadata = {"run_id": run_id}
+        else:
+            assistant_metadata = {**assistant_metadata, "run_id": run_id}
         self._message_repo.create(
             models.Message(
                 id=str(uuid4()),
@@ -135,9 +186,7 @@ class ChatService:
                 role="assistant",
                 content=answer_text or "",
                 created_at=datetime.now(timezone.utc),
-                metadata_json={"clarification_required": True}
-                if clarification
-                else ({"error": result.error} if result.error else None),
+                metadata_json=assistant_metadata,
             )
         )
 
@@ -162,7 +211,7 @@ class ChatService:
                 role="user",
                 content=prompt,
                 created_at=now,
-                metadata_json=None,
+                metadata_json={"run_id": run_id},
             )
         )
 
@@ -200,6 +249,13 @@ class ChatService:
                     ):
                         last_state = state
                         if state.event is not None:
+                            if state.event.event_type == "tool_executor.completed":
+                                for log_event in self._tool_log_events(
+                                    session_id=session_id,
+                                    run_id=run_id,
+                                    tool_results=state.tool_results,
+                                ):
+                                    queue.put(log_event)
                             events = decider.runtime_events(
                                 session_id=session_id,
                                 run_id=run_id,
@@ -268,7 +324,11 @@ class ChatService:
                             role="assistant",
                             content=persistence["message"],
                             created_at=datetime.now(timezone.utc),
-                            metadata_json=persistence["metadata"],
+                            metadata_json=(
+                                {**(persistence["metadata"] or {}), "run_id": run_id}
+                                if isinstance(persistence["metadata"], dict) or persistence["metadata"] is None
+                                else {"run_id": run_id}
+                            ),
                         )
                     )
                     for event in events:

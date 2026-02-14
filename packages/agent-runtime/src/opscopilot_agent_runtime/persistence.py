@@ -28,6 +28,22 @@ def _bytes_for(payload: object) -> int:
         return 0
 
 
+def _structured_tool_response(response: dict) -> dict:
+    structured = response.get("structured_content")
+    if isinstance(structured, dict):
+        return structured
+    return {}
+
+
+def _tool_result_payload(tool_name: str, structured_response: dict) -> dict | None:
+    result = structured_response.get("result")
+    if not isinstance(result, dict):
+        return None
+    if tool_name == "k8s.get_pod_logs":
+        return result
+    return None
+
+
 class AgentRunRecorder:
     def __init__(self, session_id: str | None = None, run_id: str | None = None) -> None:
         self._session_id = session_id or _session_id()
@@ -120,11 +136,21 @@ class AgentRunRecorder:
             db.commit()
 
     def record_tool_call(self, tool_name: str, args: dict, response: dict) -> None:
+        structured = _structured_tool_response(response)
         error_message = None
-        status = response.get("status")
+        status = structured.get("status")
         if status != "success":
-            error = response.get("error") or {}
-            error_message = error.get("message")
+            error = structured.get("error")
+            if isinstance(error, dict):
+                error_message_value = error.get("message")
+                if isinstance(error_message_value, str):
+                    error_message = error_message_value
+        result_payload = _tool_result_payload(tool_name, structured)
+        latency_ms_raw = structured.get("latency_ms", 0)
+        if isinstance(latency_ms_raw, int):
+            latency_ms = latency_ms_raw
+        else:
+            latency_ms = 0
         with self._sessionmaker() as db:
             db.add(
                 models.ToolCall(
@@ -133,9 +159,10 @@ class AgentRunRecorder:
                     tool_name=tool_name,
                     args_json=args,
                     status=status or "error",
-                    latency_ms=int(response.get("latency_ms", 0)),
-                    bytes_returned=_bytes_for(response.get("result")),
-                    truncated=bool(response.get("truncated")),
+                    latency_ms=latency_ms,
+                    bytes_returned=_bytes_for(result_payload),
+                    truncated=bool(structured.get("truncated")),
+                    result_json=result_payload,
                     error_message=error_message,
                     created_at=_now(),
                 )
