@@ -116,6 +116,8 @@
     display: grid;
     grid-template-columns: 280px minmax(420px, 1fr);
     gap: 14px;
+    height: calc(100vh - 176px);
+    min-height: 420px;
   }
 
   .panel {
@@ -169,10 +171,12 @@
 
     .layout {
       grid-template-columns: 1fr;
+      height: auto;
     }
 
     .chat {
       min-height: 420px;
+      max-height: 420px;
     }
   }
 }
@@ -366,11 +370,14 @@
   .chat {
     display: flex;
     flex-direction: column;
-    min-height: 560px;
+    height: calc(100vh - 176px);
+    min-height: 420px;
+    max-height: calc(100vh - 176px);
   }
 
   .messages {
     flex: 1;
+    min-height: 0;
     padding: 16px;
     display: flex;
     flex-direction: column;
@@ -419,6 +426,39 @@
     color: var(--muted);
     font-size: 12px;
     max-width: 100%;
+  }
+
+  .live-events {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .live-event-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .event-spinner {
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--border);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .composer {

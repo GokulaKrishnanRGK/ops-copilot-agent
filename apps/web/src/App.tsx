@@ -1,4 +1,9 @@
-import { FormEvent, UIEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChatPanel, LiveEvent, RenderMessage } from "./components/ChatPanel";
+import { SessionsPanel } from "./components/SessionsPanel";
+import { ThemeSelector } from "./components/ThemeSelector";
+import { streamChat } from "./lib/sse";
+import { useListMessagesQuery } from "./store/api/messageApi";
 import {
   sessionStreamUrl,
   useCreateSessionMutation,
@@ -6,43 +11,10 @@ import {
   useLazyListSessionsQuery,
   useRenameSessionMutation,
 } from "./store/api/sessionApi";
-import { useListMessagesQuery } from "./store/api/messageApi";
-import { streamChat } from "./lib/sse";
 import { ChatEvent, Message, Session, ThemeMode } from "./types";
 
 const THEME_STORAGE_KEY = "opscopilot-theme-mode";
 const SESSION_SCROLL_BATCH_SIZE = 5;
-
-type RenderMessage = {
-  id: string;
-  role: "user" | "assistant" | "event";
-  text: string;
-};
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 5v14M5 12h14"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M6 12a1.8 1.8 0 1 0 0 0.01M12 12a1.8 1.8 0 1 0 0 0.01M18 12a1.8 1.8 0 1 0 0 0.01"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
 
 function normalizeMutationError(error: unknown, fallback: string): string {
   if (
@@ -54,10 +26,6 @@ function normalizeMutationError(error: unknown, fallback: string): string {
     return `${fallback} (${String((error as { status: number }).status)})`;
   }
   return fallback;
-}
-
-function sessionLabel(session: Session): string {
-  return session.title || session.id.slice(0, 8);
 }
 
 function errorMessageFromUnknown(error: unknown, fallback: string): string {
@@ -85,33 +53,41 @@ function mapPersistedMessage(message: Message): RenderMessage {
   };
 }
 
-function summarizeEvent(event: ChatEvent): string {
-  const payload = event.payload;
-  if (event.type === "clarifier.clarification_required") {
-    const question = payload.question;
-    if (typeof question === "string" && question.trim()) {
-      return `Clarification needed: ${question}`;
-    }
+function streamSourceFromEvent(event: ChatEvent): string {
+  const source = event.payload.source;
+  if (typeof source === "string" && source.trim()) {
+    return source.trim();
   }
-  if (event.type === "error") {
-    const message = payload.message;
-    if (typeof message === "string" && message.trim()) {
-      return `Error: ${message}`;
-    }
+  return "answer";
+}
+
+function stageFromEventType(
+  eventType: string
+): { stage: string; state: "running" | "done" } | null {
+  if (eventType.endsWith(".started")) {
+    return {
+      stage: eventType.replace(".started", ""),
+      state: "running",
+    };
   }
-  if (event.type === "agent_run.failed") {
-    const reason = payload.reason;
-    if (typeof reason === "string" && reason.trim()) {
-      return `Run failed: ${reason}`;
-    }
+  if (eventType.endsWith(".completed")) {
+    return {
+      stage: eventType.replace(".completed", ""),
+      state: "done",
+    };
   }
-  if (event.type === "agent_run.completed") {
-    const summary = payload.summary;
-    if (typeof summary === "string" && summary.trim()) {
-      return `Run completed: ${summary}`;
-    }
-  }
-  return event.type;
+  return null;
+}
+
+function stageLabel(stage: string): string {
+  const labels: Record<string, string> = {
+    agent_run: "Run",
+    scope_check: "Scope check",
+    planner: "Planning",
+    clarifier: "Clarification",
+    answer: "Answering",
+  };
+  return labels[stage] ?? stage;
 }
 
 export function App() {
@@ -135,7 +111,10 @@ export function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamMessages, setStreamMessages] = useState<RenderMessage[]>([]);
+  const [liveEvent, setLiveEvent] = useState<LiveEvent | null>(null);
   const [error, setError] = useState<string>("");
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === "dark" || stored === "light" || stored === "system") {
@@ -144,14 +123,11 @@ export function App() {
     return "system";
   });
 
-  const {
-    data: persistedMessages = [],
-    error: messagesError,
-    refetch: refetchMessages,
-  } = useListMessagesQuery(
+  const { data: persistedMessages = [], error: messagesError } = useListMessagesQuery(
     { sessionId: activeSessionId },
     {
       skip: !activeSessionId,
+      refetchOnMountOrArgChange: true,
     }
   );
 
@@ -163,6 +139,7 @@ export function App() {
     if (activeSessionId && !sessions.some((session) => session.id === activeSessionId)) {
       setActiveSessionId(sessions[0]?.id ?? "");
       setStreamMessages([]);
+      setLiveEvent(null);
     }
   }, [sessions, activeSessionId]);
 
@@ -176,6 +153,7 @@ export function App() {
   useEffect(() => {
     setOpenMenuSessionId("");
     setStreamMessages([]);
+    setLiveEvent(null);
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -231,6 +209,14 @@ export function App() {
     return [...persisted, ...streamMessages];
   }, [persistedMessages, streamMessages]);
 
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }, [chatMessages, liveEvent, loading]);
+
   const sessionsErrorMessage = sessionsError ? "list sessions failed" : "";
   const messagesErrorMessage = messagesError ? "list messages failed" : "";
   const displayError = error || sessionsErrorMessage || messagesErrorMessage;
@@ -261,6 +247,7 @@ export function App() {
       setEditingTitle("");
       setOpenMenuSessionId("");
       setStreamMessages([]);
+      setLiveEvent(null);
     } catch (err) {
       setError(normalizeMutationError(err, "create session failed"));
     }
@@ -313,6 +300,7 @@ export function App() {
       if (sessionId === activeSessionId) {
         setActiveSessionId("");
         setStreamMessages([]);
+        setLiveEvent(null);
       }
       if (sessionId === editingSessionId) {
         setEditingSessionId("");
@@ -346,11 +334,12 @@ export function App() {
     }
 
     setError("");
+    setLiveEvent(null);
     const userText = input.trim();
     setInput("");
 
-    const userMessageId = `temp-user-${Date.now()}`;
-    const assistantMessageId = `temp-assistant-${Date.now()}`;
+    const streamId = `${Date.now()}`;
+    const userMessageId = `temp-user-${streamId}`;
 
     setStreamMessages((prev) => [...prev, { id: userMessageId, role: "user", text: userText }]);
     setLoading(true);
@@ -359,6 +348,8 @@ export function App() {
       await streamChat(sessionStreamUrl(activeSessionId), { message: userText }, (chatEvent) => {
         if (chatEvent.type === "assistant.token.delta") {
           const text = String(chatEvent.payload.text ?? "");
+          const source = streamSourceFromEvent(chatEvent);
+          const assistantMessageId = `temp-assistant-${streamId}-${source}`;
           setStreamMessages((prev) => {
             const existingIndex = prev.findIndex((item) => item.id === assistantMessageId);
             if (existingIndex === -1) {
@@ -375,28 +366,60 @@ export function App() {
           return;
         }
 
-        const eventText = summarizeEvent(chatEvent);
-        setStreamMessages((prev) => [
-          ...prev,
-          {
-            id: `event-${chatEvent.type}-${chatEvent.timestamp}-${Math.random().toString(36).slice(2)}`,
-            role: "event",
-            text: eventText,
-          },
-        ]);
+        const stage = stageFromEventType(chatEvent.type);
+        if (stage) {
+          setLiveEvent({
+            id: stage.stage,
+            label: stageLabel(stage.stage),
+            state: stage.state,
+          });
+        }
+
+        if (chatEvent.type === "answer.completed") {
+          const finalMessage = chatEvent.payload.message;
+          if (typeof finalMessage === "string" && finalMessage.trim()) {
+            const assistantMessageId = `temp-assistant-${streamId}-answer`;
+            setStreamMessages((prev) => {
+              const existingIndex = prev.findIndex((item) => item.id === assistantMessageId);
+              if (existingIndex === -1) {
+                return [...prev, { id: assistantMessageId, role: "assistant", text: finalMessage }];
+              }
+              const next = [...prev];
+              next[existingIndex] = {
+                ...next[existingIndex],
+                text: finalMessage,
+              };
+              return next;
+            });
+          }
+          return;
+        }
+
+        if (chatEvent.type === "agent_run.completed") {
+          setLiveEvent(null);
+          return;
+        }
+
+        if (chatEvent.type === "agent_run.failed") {
+          setLiveEvent(null);
+          const reason = chatEvent.payload.reason;
+          if (typeof reason === "string" && reason.trim()) {
+            setError(reason);
+          }
+          return;
+        }
 
         if (chatEvent.type === "error") {
           const message = chatEvent.payload.message;
           if (typeof message === "string" && message.trim()) {
             setError(message);
           }
+          setLiveEvent(null);
         }
       });
-
-      await refetchMessages();
-      setStreamMessages((prev) => prev.filter((message) => message.role === "event"));
     } catch (err) {
       setError(errorMessageFromUnknown(err, "request failed"));
+      setLiveEvent(null);
     } finally {
       setLoading(false);
     }
@@ -409,141 +432,53 @@ export function App() {
           <h1>Ops Copilot</h1>
           <p>Live operations assistant with streaming execution trace</p>
         </div>
-        <label className="theme-switcher">
-          Theme
-          <select
-            value={themeMode}
-            onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
-          >
-            <option value="system">System</option>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
+        <ThemeSelector value={themeMode} onChange={setThemeMode} />
       </header>
       <main className="layout">
-        <aside className="panel sessions">
-          <div className="panel-header">
-            <h2>Sessions</h2>
-            <button
-              className="new-chat-button"
-              onClick={onCreateSession}
-              disabled={isCreatingSession || isRenamingSession || isDeletingSession}
-            >
-              <PlusIcon />
-              <span>New chat</span>
-            </button>
-          </div>
-          <ul onScroll={onSessionListScroll}>
-            {sessions.map((session) => {
-              const isActive = session.id === activeSessionId;
-              const isEditing = session.id === editingSessionId;
-
-              return (
-                <li key={session.id} className="session-row">
-                  {isEditing ? (
-                    <div className="session-edit">
-                      <input
-                        value={editingTitle}
-                        onChange={(event) => setEditingTitle(event.target.value)}
-                        disabled={isRenamingSession}
-                        placeholder="Session title"
-                      />
-                      <div className="session-actions">
-                        <button
-                          onClick={() => void onSaveRename(session.id)}
-                          disabled={isRenamingSession}
-                        >
-                          Save
-                        </button>
-                        <button
-                          className="button-muted"
-                          onClick={onCancelRename}
-                          disabled={isRenamingSession}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className={`session-item ${isActive ? "active" : ""} ${openMenuSessionId === session.id ? "menu-open" : ""}`}
-                    >
-                      <button
-                        className="session-select"
-                        onClick={() => setActiveSessionId(session.id)}
-                        title={sessionLabel(session)}
-                      >
-                        <span className="session-label">{sessionLabel(session)}</span>
-                      </button>
-                      <button
-                        className="session-more-button"
-                        aria-label="Session options"
-                        title="More"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setOpenMenuSessionId((prev) => (prev === session.id ? "" : session.id));
-                        }}
-                      >
-                        <MoreIcon />
-                      </button>
-                      {openMenuSessionId === session.id ? (
-                        <div
-                          className="session-inline-menu"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            className="context-menu-button"
-                            onClick={() => onStartRename(session)}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            className="context-menu-button"
-                            onClick={() => void onDeleteSession(session.id)}
-                            disabled={isDeletingSession}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-            {hasMoreSessions ? (
-              <li className="session-load-hint">Scroll for more sessions</li>
-            ) : null}
-          </ul>
-        </aside>
-        <section className="panel chat">
-          <div className="panel-header">
-            <h2>Chat</h2>
-            <span>
-              {activeSession ? activeSession.title || activeSession.id : "No session selected"}
-            </span>
-          </div>
-          <div className="messages">
-            {chatMessages.map((message) => (
-              <div key={message.id} className={`message-row ${message.role}`}>
-                <p className={`message-text ${message.role}`}>{message.text}</p>
-              </div>
-            ))}
-          </div>
-          <form className="composer" onSubmit={onSubmit}>
-            <input
-              value={input}
-              disabled={loading || !activeSessionId}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about pod status, logs, or events..."
-            />
-            <button disabled={loading || !activeSessionId}>
-              {loading ? "Running..." : "Send"}
-            </button>
-          </form>
-          {displayError ? <div className="error">{displayError}</div> : null}
-        </section>
+        <SessionsPanel
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          editingSessionId={editingSessionId}
+          editingTitle={editingTitle}
+          openMenuSessionId={openMenuSessionId}
+          hasMoreSessions={hasMoreSessions}
+          loadingState={{
+            creating: isCreatingSession,
+            renaming: isRenamingSession,
+            deleting: isDeletingSession,
+          }}
+          onCreateSession={onCreateSession}
+          onSelectSession={setActiveSessionId}
+          onStartRename={onStartRename}
+          onCancelRename={onCancelRename}
+          onSaveRename={(sessionId) => {
+            void onSaveRename(sessionId);
+          }}
+          onDeleteSession={(sessionId) => {
+            void onDeleteSession(sessionId);
+          }}
+          onEditingTitleChange={setEditingTitle}
+          onToggleSessionMenu={(sessionId) => {
+            setOpenMenuSessionId((prev) => (prev === sessionId ? "" : sessionId));
+          }}
+          onSessionListScroll={onSessionListScroll}
+        />
+        <ChatPanel
+          activeSessionLabel={
+            activeSession ? activeSession.title || activeSession.id : "No session selected"
+          }
+          messages={chatMessages}
+          liveEvent={liveEvent}
+          input={input}
+          loading={loading}
+          disabled={!activeSessionId}
+          error={displayError}
+          messagesContainerRef={messagesContainerRef}
+          onInputChange={setInput}
+          onSubmit={(submitEvent) => {
+            void onSubmit(submitEvent);
+          }}
+        />
       </main>
     </div>
   );

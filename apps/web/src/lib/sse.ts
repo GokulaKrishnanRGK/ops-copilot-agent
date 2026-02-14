@@ -3,14 +3,15 @@ import { ChatEvent } from "../types";
 function parseDataBlock(block: string): { event: string; data: string } | null {
   const lines = block.split("\n");
   let event = "message";
-  let data = "";
+  const dataLines: string[] = [];
   for (const line of lines) {
     if (line.startsWith("event:")) {
       event = line.slice(6).trim();
     } else if (line.startsWith("data:")) {
-      data += line.slice(5).trim();
+      dataLines.push(line.slice(5).trimStart());
     }
   }
+  const data = dataLines.join("\n");
   if (!data) {
     return null;
   }
@@ -50,6 +51,14 @@ export async function streamChat(
       if (!parsed) {
         continue;
       }
+      const payload = JSON.parse(parsed.data) as ChatEvent;
+      onEvent({ ...payload, type: parsed.event || payload.type });
+    }
+  }
+
+  if (buffer.trim()) {
+    const parsed = parseDataBlock(buffer);
+    if (parsed) {
       const payload = JSON.parse(parsed.data) as ChatEvent;
       onEvent({ ...payload, type: parsed.event || payload.type });
     }
