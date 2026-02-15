@@ -5,7 +5,7 @@ import os
 from dataclasses import replace
 from typing import Callable
 
-from opentelemetry import trace
+from opentelemetry import metrics, trace
 from opscopilot_llm_gateway.accounting import CostLedger, CostRecord
 from opscopilot_llm_gateway.budgets import BudgetEnforcer
 from opscopilot_llm_gateway.costs import estimate_cost_usd
@@ -32,6 +32,12 @@ class LlmNodeBase:
         self._budget = budget
         self._ledger = ledger
         self._tracer = trace.get_tracer("opscopilot_agent_runtime.llm")
+        meter = metrics.get_meter("opscopilot_agent_runtime.llm")
+        self._llm_calls_total = meter.create_counter("llm_calls_total")
+        self._llm_tokens_input_total = meter.create_counter("llm_tokens_input_total")
+        self._llm_tokens_output_total = meter.create_counter("llm_tokens_output_total")
+        self._llm_cost_usd_total = meter.create_counter("llm_cost_usd_total")
+        self._llm_call_latency_ms = meter.create_histogram("llm_call_latency_ms")
 
     def _call(
         self,
@@ -103,6 +109,15 @@ class LlmNodeBase:
             span.set_attribute("tokens_output", response.tokens_output)
             span.set_attribute("cost_usd", float(cost_usd))
             span.set_attribute("latency_ms", response.latency_ms)
+            metric_attrs = {
+                "agent_node": agent_node,
+                "model_id": effective_request.model_id,
+            }
+            self._llm_calls_total.add(1, metric_attrs)
+            self._llm_tokens_input_total.add(response.tokens_input, metric_attrs)
+            self._llm_tokens_output_total.add(response.tokens_output, metric_attrs)
+            self._llm_cost_usd_total.add(float(cost_usd), metric_attrs)
+            self._llm_call_latency_ms.record(response.latency_ms, metric_attrs)
         if os.getenv("AGENT_DEBUG") == "1" or os.getenv("LLM_DEBUG") == "1":
             logger.info(
                 "llm response node=%s tokens_in=%s tokens_out=%s cost_usd=%s error=%s output=%s",
