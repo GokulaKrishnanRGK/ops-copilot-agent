@@ -4,6 +4,7 @@ from typing import Callable
 from queue import Empty, Queue
 import threading
 from uuid import uuid4
+from opentelemetry import trace
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.state import AgentState
@@ -50,6 +51,7 @@ class ChatService:
         self._message_repo = message_repo
         self._runtime_factory = runtime_factory
         self._recorder_factory = recorder_factory
+        self._tracer = trace.get_tracer("opscopilot_api.chat")
 
     def _load_prompt_history(self, session_id: str) -> list[str]:
         messages = list(self._message_repo.list_by_session(session_id))
@@ -148,56 +150,60 @@ class ChatService:
             raise SessionNotFoundError("session not found")
 
         run_id = str(uuid4())
-        prompt_history = self._load_prompt_history(session_id)
-        now = datetime.now(timezone.utc)
-        self._message_repo.create(
-            models.Message(
-                id=str(uuid4()),
-                session_id=session_id,
-                role="user",
-                content=prompt,
-                created_at=now,
-                metadata_json={"run_id": run_id},
+        with self._tracer.start_as_current_span("chat.run") as span:
+            span.set_attribute("session_id", session_id)
+            span.set_attribute("agent_run_id", run_id)
+            prompt_history = self._load_prompt_history(session_id)
+            now = datetime.now(timezone.utc)
+            self._message_repo.create(
+                models.Message(
+                    id=str(uuid4()),
+                    session_id=session_id,
+                    role="user",
+                    content=prompt,
+                    created_at=now,
+                    metadata_json={"run_id": run_id},
+                )
             )
-        )
-        recorder = self._recorder_factory(session_id, run_id)
-        runtime = self._runtime_factory.create(recorder=recorder)
-        try:
-            result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
-        except Exception as exc:
-            raise ChatExecutionError("agent runtime failed") from exc
+            recorder = self._recorder_factory(session_id, run_id)
+            runtime = self._runtime_factory.create(recorder=recorder)
+            try:
+                result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
+            except Exception as exc:
+                span.record_exception(exc)
+                raise ChatExecutionError("agent runtime failed") from exc
 
-        answer_text = result.answer
-        if answer_text is None and result.error:
-            answer_text = result.error.get("message", "request failed")
-        clarification = self._is_clarification(result.error)
-        assistant_metadata: dict | None
-        if clarification:
-            assistant_metadata = {"clarification_required": True}
-        elif result.error:
-            assistant_metadata = {"error": result.error}
-        else:
-            assistant_metadata = None
-        if assistant_metadata is None:
-            assistant_metadata = {"run_id": run_id}
-        else:
-            assistant_metadata = {**assistant_metadata, "run_id": run_id}
-        self._message_repo.create(
-            models.Message(
-                id=str(uuid4()),
-                session_id=session_id,
-                role="assistant",
-                content=answer_text or "",
-                created_at=datetime.now(timezone.utc),
-                metadata_json=assistant_metadata,
+            answer_text = result.answer
+            if answer_text is None and result.error:
+                answer_text = result.error.get("message", "request failed")
+            clarification = self._is_clarification(result.error)
+            assistant_metadata: dict | None
+            if clarification:
+                assistant_metadata = {"clarification_required": True}
+            elif result.error:
+                assistant_metadata = {"error": result.error}
+            else:
+                assistant_metadata = None
+            if assistant_metadata is None:
+                assistant_metadata = {"run_id": run_id}
+            else:
+                assistant_metadata = {**assistant_metadata, "run_id": run_id}
+            self._message_repo.create(
+                models.Message(
+                    id=str(uuid4()),
+                    session_id=session_id,
+                    role="assistant",
+                    content=answer_text or "",
+                    created_at=datetime.now(timezone.utc),
+                    metadata_json=assistant_metadata,
+                )
             )
-        )
 
-        return ChatResult(
-            run_id=run_id,
-            answer=answer_text,
-            error=None if clarification else result.error,
-        )
+            return ChatResult(
+                run_id=run_id,
+                answer=answer_text,
+                error=None if clarification else result.error,
+            )
 
     def run_stream(self, session_id: str, prompt: str):
         session = self._session_repo.get(session_id)
@@ -219,128 +225,133 @@ class ChatService:
         )
 
         def _stream():
-            yield agent_run_started(session_id, run_id)
+            with self._tracer.start_as_current_span("chat.run_stream") as span:
+                span.set_attribute("session_id", session_id)
+                span.set_attribute("agent_run_id", run_id)
+                yield agent_run_started(session_id, run_id)
 
-            recorder = self._recorder_factory(session_id, run_id)
-            runtime = self._runtime_factory.create(recorder=recorder)
-            decider = StreamEventDecider()
-            tracker = StreamLifecycleTracker()
-            queue: Queue = Queue()
-            done = object()
+                recorder = self._recorder_factory(session_id, run_id)
+                runtime = self._runtime_factory.create(recorder=recorder)
+                decider = StreamEventDecider()
+                tracker = StreamLifecycleTracker()
+                queue: Queue = Queue()
+                done = object()
 
-            def on_llm_delta(node: str, text: str) -> None:
-                events = decider.llm_delta_events(
-                    session_id=session_id,
-                    run_id=run_id,
-                    node=node,
-                    text=text,
-                    tracker=tracker,
-                )
-                for event in events:
-                    queue.put(event)
-
-            def worker():
-                try:
-                    answer_emitted = False
-                    last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
-                    for state in runtime.run_stream(
-                        AgentState(
-                            prompt=prompt,
-                            prompt_history=prompt_history,
-                            llm_stream_callback=on_llm_delta,
-                        )
-                    ):
-                        last_state = state
-                        if state.event is not None:
-                            if state.event.event_type == "tool_executor.completed":
-                                for log_event in self._tool_log_events(
-                                    session_id=session_id,
-                                    run_id=run_id,
-                                    tool_results=state.tool_results,
-                                ):
-                                    queue.put(log_event)
-                            events = decider.runtime_events(
-                                session_id=session_id,
-                                run_id=run_id,
-                                event_type=state.event.event_type,
-                                payload=state.event.payload or {},
-                                tracker=tracker,
-                                answer_message=state.answer,
-                            )
-                            for event in events:
-                                queue.put(event)
-                        terminal_item, answer_emitted = terminal_item_from_state(
-                            state=state,
-                            answer_emitted=answer_emitted,
-                            is_clarification=self._is_clarification,
-                        )
-                        if terminal_item is not None:
-                            queue.put(terminal_item)
-                            return
-
-                    if last_state.answer:
-                        queue.put({"__terminal__": "answer", "message": last_state.answer})
-                        return
-                    message = "agent runtime completed without an assistant response"
-                    queue.put(
-                        {
-                            "__terminal__": "error",
-                            "message": message,
-                            "failure_type": "runtime_error",
-                            "context": {"type": "runtime_error", "message": message},
-                        }
-                    )
-                except Exception as exc:
-                    message = str(exc) or "agent runtime failed"
-                    queue.put(
-                        {
-                            "__terminal__": "error",
-                            "message": message,
-                            "failure_type": "runtime_error",
-                            "context": {"type": "runtime_error", "message": message},
-                        }
-                    )
-                    queue.put(done)
-
-            thread = threading.Thread(target=worker, daemon=True)
-            thread.start()
-            token_emitted = False
-            while True:
-                try:
-                    item = queue.get(timeout=0.2)
-                except Empty:
-                    if not thread.is_alive():
-                        break
-                    continue
-                if isinstance(item, dict) and "__terminal__" in item:
-                    persistence, events = terminal_stream_events(
-                        terminal_item=item,
+                def on_llm_delta(node: str, text: str) -> None:
+                    events = decider.llm_delta_events(
                         session_id=session_id,
                         run_id=run_id,
-                        token_emitted=token_emitted,
-                        chunk_text=self._chunk_text,
-                    )
-                    self._message_repo.create(
-                        models.Message(
-                            id=str(uuid4()),
-                            session_id=session_id,
-                            role="assistant",
-                            content=persistence["message"],
-                            created_at=datetime.now(timezone.utc),
-                            metadata_json=(
-                                {**(persistence["metadata"] or {}), "run_id": run_id}
-                                if isinstance(persistence["metadata"], dict) or persistence["metadata"] is None
-                                else {"run_id": run_id}
-                            ),
-                        )
+                        node=node,
+                        text=text,
+                        tracker=tracker,
                     )
                     for event in events:
-                        yield event
-                    break
-                if item is done:
-                    break
-                if item.get("type") == "assistant.token.delta":
-                    token_emitted = True
-                yield item
+                        queue.put(event)
+
+                def worker():
+                    try:
+                        answer_emitted = False
+                        last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
+                        for state in runtime.run_stream(
+                            AgentState(
+                                prompt=prompt,
+                                prompt_history=prompt_history,
+                                llm_stream_callback=on_llm_delta,
+                            )
+                        ):
+                            last_state = state
+                            if state.event is not None:
+                                if state.event.event_type == "tool_executor.completed":
+                                    for log_event in self._tool_log_events(
+                                        session_id=session_id,
+                                        run_id=run_id,
+                                        tool_results=state.tool_results,
+                                    ):
+                                        queue.put(log_event)
+                                events = decider.runtime_events(
+                                    session_id=session_id,
+                                    run_id=run_id,
+                                    event_type=state.event.event_type,
+                                    payload=state.event.payload or {},
+                                    tracker=tracker,
+                                    answer_message=state.answer,
+                                )
+                                for event in events:
+                                    queue.put(event)
+                            terminal_item, answer_emitted = terminal_item_from_state(
+                                state=state,
+                                answer_emitted=answer_emitted,
+                                is_clarification=self._is_clarification,
+                            )
+                            if terminal_item is not None:
+                                queue.put(terminal_item)
+                                return
+
+                        if last_state.answer:
+                            queue.put({"__terminal__": "answer", "message": last_state.answer})
+                            return
+                        message = "agent runtime completed without an assistant response"
+                        queue.put(
+                            {
+                                "__terminal__": "error",
+                                "message": message,
+                                "failure_type": "runtime_error",
+                                "context": {"type": "runtime_error", "message": message},
+                            }
+                        )
+                    except Exception as exc:
+                        span.record_exception(exc)
+                        message = str(exc) or "agent runtime failed"
+                        queue.put(
+                            {
+                                "__terminal__": "error",
+                                "message": message,
+                                "failure_type": "runtime_error",
+                                "context": {"type": "runtime_error", "message": message},
+                            }
+                        )
+                        queue.put(done)
+
+                thread = threading.Thread(target=worker, daemon=True)
+                thread.start()
+                token_emitted = False
+                while True:
+                    try:
+                        item = queue.get(timeout=0.2)
+                    except Empty:
+                        if not thread.is_alive():
+                            break
+                        continue
+                    if isinstance(item, dict) and "__terminal__" in item:
+                        persistence, events = terminal_stream_events(
+                            terminal_item=item,
+                            session_id=session_id,
+                            run_id=run_id,
+                            token_emitted=token_emitted,
+                            chunk_text=self._chunk_text,
+                        )
+                        self._message_repo.create(
+                            models.Message(
+                                id=str(uuid4()),
+                                session_id=session_id,
+                                role="assistant",
+                                content=persistence["message"],
+                                created_at=datetime.now(timezone.utc),
+                                metadata_json=(
+                                    {**(persistence["metadata"] or {}), "run_id": run_id}
+                                    if isinstance(persistence["metadata"], dict)
+                                    or persistence["metadata"] is None
+                                    else {"run_id": run_id}
+                                ),
+                            )
+                        )
+                        for event in events:
+                            yield event
+                        break
+                    if item is done:
+                        break
+                    if item.get("type") == "assistant.token.delta":
+                        token_emitted = True
+                    yield item
 
         return _stream()

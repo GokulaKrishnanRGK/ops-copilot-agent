@@ -4,6 +4,8 @@ import json
 import os
 from dataclasses import dataclass
 
+from opentelemetry import propagate, trace
+
 from opscopilot_agent_runtime.mcp_client import MCPClient
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.events import AgentEvent
@@ -19,8 +21,28 @@ class ToolResult:
     result: dict
 
 
+def _instrumented_arguments(
+    args: dict,
+    recorder: AgentRunRecorder | None,
+) -> dict:
+    next_args = dict(args)
+    carrier: dict[str, str] = {}
+    propagate.inject(carrier)
+    traceparent = carrier.get("traceparent")
+    if traceparent:
+        next_args["__traceparent"] = traceparent
+    tracestate = carrier.get("tracestate")
+    if tracestate:
+        next_args["__tracestate"] = tracestate
+    if recorder:
+        next_args["__session_id"] = recorder.session_id
+        next_args["__agent_run_id"] = recorder.run_id
+    return next_args
+
+
 def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | None = None) -> list[ToolResult]:
     logger = get_logger(__name__)
+    tracer = trace.get_tracer("opscopilot_agent_runtime.tool_executor")
     results: list[ToolResult] = []
     for step in plan.steps:
         if os.getenv("AGENT_DEBUG") == "1":
@@ -30,7 +52,18 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
                 step.tool_name,
                 json.dumps(step.args, default=str),
             )
-        response = client.call_tool(step.tool_name, step.args)
+        with tracer.start_as_current_span("tool.call") as span:
+            span.set_attribute("tool_name", step.tool_name)
+            if recorder:
+                span.set_attribute("session_id", recorder.session_id)
+                span.set_attribute("agent_run_id", recorder.run_id)
+            response = client.call_tool(
+                step.tool_name,
+                _instrumented_arguments(step.args, recorder),
+            )
+            status = response.get("structured_content", {}).get("status")
+            if isinstance(status, str):
+                span.set_attribute("result_status", status)
         if os.getenv("AGENT_DEBUG") == "1":
             logger.info(
                 "tool_executor result step=%s tool=%s response=%s",

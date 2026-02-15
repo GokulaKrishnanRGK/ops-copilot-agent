@@ -77,7 +77,10 @@ class PlannerNode:
                 if os.getenv("AGENT_DEBUG") == "1":
                     logger = get_logger(__name__)
                     logger.info("planner: retrieving rag context")
-                rag_context = self._rag_retriever.retrieve(next_state.prompt)
+                rag_context = self._rag_retriever.retrieve(
+                    next_state.prompt,
+                    recorder=next_state.recorder,
+                )
                 next_state = next_state.merge(rag=rag_context)
             except Exception as exc:
                 logger = get_logger(__name__)
