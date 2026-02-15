@@ -4,7 +4,7 @@ import time
 from fastapi import FastAPI, Request
 from opentelemetry import trace
 
-from .logging import configure_logging, reset_log_context, set_log_context
+from .logging import clear_log_context, configure_logging, set_log_context
 from .routers.health_router import router as health_router
 from .routers.api_router import router as api_router
 from .telemetry import configure_telemetry
@@ -23,7 +23,7 @@ def create_app() -> FastAPI:
         session_id = ""
         if len(path_parts) >= 3 and path_parts[0] == "api" and path_parts[1] == "sessions":
             session_id = path_parts[2]
-        context_tokens = set_log_context(session_id=session_id, agent_run_id="")
+        set_log_context(session_id=session_id, agent_run_id="")
         with tracer.start_as_current_span(f"{request.method} {request.url.path}") as span:
             span.set_attribute("http.method", request.method)
             span.set_attribute("http.route", request.url.path)
@@ -53,7 +53,7 @@ def create_app() -> FastAPI:
                 )
                 raise
             finally:
-                reset_log_context(context_tokens)
+                clear_log_context()
 
     app.include_router(health_router)
     app.include_router(api_router, prefix="/api")

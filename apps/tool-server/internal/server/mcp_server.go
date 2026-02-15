@@ -11,21 +11,25 @@ import (
 )
 
 type listPodsInput struct {
+	InstrumentationInput
 	Namespace     string `json:"namespace"`
 	LabelSelector string `json:"label_selector"`
 }
 
 type describePodInput struct {
+	InstrumentationInput
 	Namespace string `json:"namespace"`
 	PodName   string `json:"pod_name"`
 }
 
 type podEventsInput struct {
+	InstrumentationInput
 	Namespace string `json:"namespace"`
 	PodName   string `json:"pod_name"`
 }
 
 type podLogsInput struct {
+	InstrumentationInput
 	Namespace string `json:"namespace"`
 	PodName   string `json:"pod_name"`
 	Container string `json:"container"`
@@ -33,8 +37,34 @@ type podLogsInput struct {
 }
 
 type describeDeploymentInput struct {
+	InstrumentationInput
 	Namespace      string `json:"namespace"`
 	DeploymentName string `json:"deployment_name"`
+}
+
+type InstrumentationInput struct {
+	Traceparent *string `json:"__traceparent,omitempty"`
+	Tracestate  *string `json:"__tracestate,omitempty"`
+	SessionID   *string `json:"__session_id,omitempty"`
+	AgentRunID  *string `json:"__agent_run_id,omitempty"`
+}
+
+func addInternalArgs(
+	payload map[string]any,
+	instrumentation InstrumentationInput,
+) {
+	if instrumentation.Traceparent != nil && *instrumentation.Traceparent != "" {
+		payload["__traceparent"] = *instrumentation.Traceparent
+	}
+	if instrumentation.Tracestate != nil && *instrumentation.Tracestate != "" {
+		payload["__tracestate"] = *instrumentation.Tracestate
+	}
+	if instrumentation.SessionID != nil && *instrumentation.SessionID != "" {
+		payload["__session_id"] = *instrumentation.SessionID
+	}
+	if instrumentation.AgentRunID != nil && *instrumentation.AgentRunID != "" {
+		payload["__agent_run_id"] = *instrumentation.AgentRunID
+	}
 }
 
 func MCPHandler() http.Handler {
@@ -53,6 +83,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace":      input.Namespace,
 				"label_selector": input.LabelSelector,
 			}
+			addInternalArgs(payload, input.InstrumentationInput)
 			resp := runToolRequest(ctx, "k8s.list_pods", payload)
 			return nil, resp, nil
 		}),
@@ -64,6 +95,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace": input.Namespace,
 				"pod_name":  input.PodName,
 			}
+			addInternalArgs(payload, input.InstrumentationInput)
 			resp := runToolRequest(ctx, "k8s.describe_pod", payload)
 			return nil, resp, nil
 		}),
@@ -75,6 +107,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace": input.Namespace,
 				"pod_name":  input.PodName,
 			}
+			addInternalArgs(payload, input.InstrumentationInput)
 			resp := runToolRequest(ctx, "k8s.get_pod_events", payload)
 			return nil, resp, nil
 		}),
@@ -92,6 +125,7 @@ func registerMCPTools(server *mcp.Server) {
 			if input.TailLines > 0 {
 				payload["tail_lines"] = input.TailLines
 			}
+			addInternalArgs(payload, input.InstrumentationInput)
 			resp := runToolRequest(ctx, "k8s.get_pod_logs", payload)
 			return nil, resp, nil
 		}),
@@ -103,6 +137,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace":       input.Namespace,
 				"deployment_name": input.DeploymentName,
 			}
+			addInternalArgs(payload, input.InstrumentationInput)
 			resp := runToolRequest(ctx, "k8s.describe_deployment", payload)
 			return nil, resp, nil
 		}),

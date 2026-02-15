@@ -32,6 +32,17 @@ class _StaticClarifier:
             ],
         }
 
+    def generate_clarify_question(  # noqa: ARG002
+        self,
+        prompt: str,
+        missing_fields: list[str],
+        recorder=None,
+        on_delta=None,
+    ) -> str:
+        if missing_fields:
+            return f"Please provide: {', '.join(missing_fields)}."
+        return "Please provide additional details."
+
 
 class _StaticPlanner:
     def plan(self, prompt, tool_names, recorder=None, on_delta=None):  # noqa: ARG002
