@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 from typing import Callable
 from queue import Empty, Queue
 import threading
+import time
 from uuid import uuid4
-from opentelemetry import trace
+from opentelemetry import metrics, trace
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.state import AgentState
@@ -52,6 +53,10 @@ class ChatService:
         self._runtime_factory = runtime_factory
         self._recorder_factory = recorder_factory
         self._tracer = trace.get_tracer("opscopilot_api.chat")
+        meter = metrics.get_meter("opscopilot_api.chat")
+        self._agent_runs_total = meter.create_counter("agent_runs_total")
+        self._agent_run_failures_total = meter.create_counter("agent_run_failures_total")
+        self._agent_run_duration_ms = meter.create_histogram("agent_run_duration_ms")
 
     def _load_prompt_history(self, session_id: str) -> list[str]:
         messages = list(self._message_repo.list_by_session(session_id))
@@ -150,59 +155,80 @@ class ChatService:
             raise SessionNotFoundError("session not found")
 
         run_id = str(uuid4())
-        with self._tracer.start_as_current_span("chat.run") as span:
-            span.set_attribute("session_id", session_id)
-            span.set_attribute("agent_run_id", run_id)
-            prompt_history = self._load_prompt_history(session_id)
-            now = datetime.now(timezone.utc)
-            self._message_repo.create(
-                models.Message(
-                    id=str(uuid4()),
-                    session_id=session_id,
-                    role="user",
-                    content=prompt,
-                    created_at=now,
-                    metadata_json={"run_id": run_id},
+        started = time.perf_counter()
+        try:
+            with self._tracer.start_as_current_span("chat.run") as span:
+                span.set_attribute("session_id", session_id)
+                span.set_attribute("agent_run_id", run_id)
+                self._agent_runs_total.add(1, {"entrypoint": "run"})
+                prompt_history = self._load_prompt_history(session_id)
+                now = datetime.now(timezone.utc)
+                self._message_repo.create(
+                    models.Message(
+                        id=str(uuid4()),
+                        session_id=session_id,
+                        role="user",
+                        content=prompt,
+                        created_at=now,
+                        metadata_json={"run_id": run_id},
+                    )
                 )
-            )
-            recorder = self._recorder_factory(session_id, run_id)
-            runtime = self._runtime_factory.create(recorder=recorder)
-            try:
-                result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
-            except Exception as exc:
-                span.record_exception(exc)
-                raise ChatExecutionError("agent runtime failed") from exc
+                recorder = self._recorder_factory(session_id, run_id)
+                runtime = self._runtime_factory.create(recorder=recorder)
+                try:
+                    result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
+                except Exception as exc:
+                    span.record_exception(exc)
+                    self._agent_run_failures_total.add(
+                        1,
+                        {"entrypoint": "run", "failure_type": "runtime_error"},
+                    )
+                    raise ChatExecutionError("agent runtime failed") from exc
 
-            answer_text = result.answer
-            if answer_text is None and result.error:
-                answer_text = result.error.get("message", "request failed")
-            clarification = self._is_clarification(result.error)
-            assistant_metadata: dict | None
-            if clarification:
-                assistant_metadata = {"clarification_required": True}
-            elif result.error:
-                assistant_metadata = {"error": result.error}
-            else:
-                assistant_metadata = None
-            if assistant_metadata is None:
-                assistant_metadata = {"run_id": run_id}
-            else:
-                assistant_metadata = {**assistant_metadata, "run_id": run_id}
-            self._message_repo.create(
-                models.Message(
-                    id=str(uuid4()),
-                    session_id=session_id,
-                    role="assistant",
-                    content=answer_text or "",
-                    created_at=datetime.now(timezone.utc),
-                    metadata_json=assistant_metadata,
+                answer_text = result.answer
+                if answer_text is None and result.error:
+                    answer_text = result.error.get("message", "request failed")
+                clarification = self._is_clarification(result.error)
+                assistant_metadata: dict | None
+                if clarification:
+                    assistant_metadata = {"clarification_required": True}
+                elif result.error:
+                    assistant_metadata = {"error": result.error}
+                else:
+                    assistant_metadata = None
+                if result.error and not clarification:
+                    failure_type = result.error.get("type") if isinstance(result.error, dict) else "unknown"
+                    failure_type_value = (
+                        failure_type if isinstance(failure_type, str) and failure_type else "unknown"
+                    )
+                    self._agent_run_failures_total.add(
+                        1,
+                        {"entrypoint": "run", "failure_type": failure_type_value},
+                    )
+                if assistant_metadata is None:
+                    assistant_metadata = {"run_id": run_id}
+                else:
+                    assistant_metadata = {**assistant_metadata, "run_id": run_id}
+                self._message_repo.create(
+                    models.Message(
+                        id=str(uuid4()),
+                        session_id=session_id,
+                        role="assistant",
+                        content=answer_text or "",
+                        created_at=datetime.now(timezone.utc),
+                        metadata_json=assistant_metadata,
+                    )
                 )
-            )
 
-            return ChatResult(
-                run_id=run_id,
-                answer=answer_text,
-                error=None if clarification else result.error,
+                return ChatResult(
+                    run_id=run_id,
+                    answer=answer_text,
+                    error=None if clarification else result.error,
+                )
+        finally:
+            self._agent_run_duration_ms.record(
+                (time.perf_counter() - started) * 1000.0,
+                {"entrypoint": "run"},
             )
 
     def run_stream(self, session_id: str, prompt: str):
@@ -225,9 +251,11 @@ class ChatService:
         )
 
         def _stream():
+            started = time.perf_counter()
             with self._tracer.start_as_current_span("chat.run_stream") as span:
                 span.set_attribute("session_id", session_id)
                 span.set_attribute("agent_run_id", run_id)
+                self._agent_runs_total.add(1, {"entrypoint": "run_stream"})
                 yield agent_run_started(session_id, run_id)
 
                 recorder = self._recorder_factory(session_id, run_id)
@@ -323,6 +351,17 @@ class ChatService:
                             break
                         continue
                     if isinstance(item, dict) and "__terminal__" in item:
+                        if item.get("__terminal__") == "error":
+                            failure_type = item.get("failure_type")
+                            failure_type_value = (
+                                failure_type
+                                if isinstance(failure_type, str) and failure_type
+                                else "runtime_error"
+                            )
+                            self._agent_run_failures_total.add(
+                                1,
+                                {"entrypoint": "run_stream", "failure_type": failure_type_value},
+                            )
                         persistence, events = terminal_stream_events(
                             terminal_item=item,
                             session_id=session_id,
@@ -353,5 +392,9 @@ class ChatService:
                     if item.get("type") == "assistant.token.delta":
                         token_emitted = True
                     yield item
+            self._agent_run_duration_ms.record(
+                (time.perf_counter() - started) * 1000.0,
+                {"entrypoint": "run_stream"},
+            )
 
         return _stream()

@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import dataclass
 
-from opentelemetry import propagate, trace
+from opentelemetry import metrics, propagate, trace
 
 from opscopilot_agent_runtime.mcp_client import MCPClient
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
@@ -43,6 +43,10 @@ def _instrumented_arguments(
 def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | None = None) -> list[ToolResult]:
     logger = get_logger(__name__)
     tracer = trace.get_tracer("opscopilot_agent_runtime.tool_executor")
+    meter = metrics.get_meter("opscopilot_agent_runtime.tool_executor")
+    tool_calls_total = meter.create_counter("tool_calls_total")
+    tool_call_errors_total = meter.create_counter("tool_call_errors_total")
+    tool_call_latency_ms = meter.create_histogram("tool_call_latency_ms")
     results: list[ToolResult] = []
     for step in plan.steps:
         if os.getenv("AGENT_DEBUG") == "1":
@@ -64,6 +68,15 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
             status = response.get("structured_content", {}).get("status")
             if isinstance(status, str):
                 span.set_attribute("result_status", status)
+            else:
+                status = "unknown"
+            latency_raw = response.get("structured_content", {}).get("latency_ms", 0)
+            latency_ms = latency_raw if isinstance(latency_raw, int) else 0
+            metric_attrs = {"tool_name": step.tool_name, "result_status": status}
+            tool_calls_total.add(1, metric_attrs)
+            tool_call_latency_ms.record(latency_ms, metric_attrs)
+            if status != "success":
+                tool_call_errors_total.add(1, {"tool_name": step.tool_name})
         if os.getenv("AGENT_DEBUG") == "1":
             logger.info(
                 "tool_executor result step=%s tool=%s response=%s",
