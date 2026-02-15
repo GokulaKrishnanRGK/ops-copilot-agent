@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from .types import Document
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_text(raw: str) -> str:
@@ -43,6 +46,11 @@ def load_documents(
 ) -> list[Document]:
     root = Path(root_dir).resolve()
     extension_set = {ext.lower() for ext in extensions} if extensions else None
+    logger.info(
+        "Loading documents root=%s extensions=%s",
+        root,
+        sorted(extension_set) if extension_set else "*",
+    )
     documents: list[Document] = []
     for path in discover_document_paths(root, extension_set):
         raw = path.read_text(encoding=encoding)
@@ -56,4 +64,7 @@ def load_documents(
                 metadata={"source": relative_path},
             )
         )
+    logger.info("Loaded documents count=%d", len(documents))
+    if documents:
+        logger.debug("First loaded document id=%s", documents[0].document_id)
     return documents

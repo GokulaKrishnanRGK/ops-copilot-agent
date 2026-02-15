@@ -14,6 +14,7 @@ dependencies = [
     "opentelemetry-api>=1.26",
     "opentelemetry-sdk>=1.26",
     "opentelemetry-exporter-otlp-proto-http>=1.26",
+    "ops-copilot-observability",
     "ops-copilot-db",
     "ops-copilot-agent-runtime",
     "pytest>=8",

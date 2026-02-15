@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from opscopilot_agent_runtime.llm.scope import ScopeClassifier
 from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_agent_runtime.runtime.logging import get_logger
@@ -29,19 +27,16 @@ class ScopeCheckNode:
         if self._classifier is None or not state.prompt:
             return state
         next_state = state
-        if os.getenv("AGENT_DEBUG") == "1":
-            logger = get_logger(__name__)
-            logger.info(
-                "scope_check: prompt_present=%s rag_retriever=%s rag_present=%s",
-                bool(next_state.prompt),
-                bool(self._rag_retriever),
-                bool(next_state.rag),
-            )
+        logger = get_logger(__name__)
+        logger.debug(
+            "scope_check: prompt_present=%s rag_retriever=%s rag_present=%s",
+            bool(next_state.prompt),
+            bool(self._rag_retriever),
+            bool(next_state.rag),
+        )
         if next_state.prompt and self._rag_retriever and next_state.rag is None:
             try:
-                if os.getenv("AGENT_DEBUG") == "1":
-                    logger = get_logger(__name__)
-                    logger.info("scope_check: retrieving rag context")
+                logger.debug("scope_check: retrieving rag context")
                 rag_context = self._rag_retriever.retrieve(
                     next_state.prompt,
                     recorder=next_state.recorder,

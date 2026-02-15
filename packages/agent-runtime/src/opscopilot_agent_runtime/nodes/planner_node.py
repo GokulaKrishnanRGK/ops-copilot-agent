@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -33,11 +32,10 @@ def plan(state: AgentState, tools: list[MCPTool] | None = None) -> AgentState:
             error={"type": "planner_error", "message": "no tools available"},
         )
     tool = tools[0]
-    if os.getenv("AGENT_DEBUG") == "1":
-        logger.info(
-            "planner fallback selected tool=%s",
-            tool.name,
-        )
+    logger.debug(
+        "planner fallback selected tool=%s",
+        tool.name,
+    )
     plan_obj = Plan(steps=[PlanStep(step_id="step-1", tool_name=tool.name, args={})])
     event = AgentEvent(event_type="planner.completed", payload={"steps": len(plan_obj.steps)})
     return state.merge(plan=plan_obj, event=event)
@@ -64,19 +62,16 @@ class PlannerNode:
             return state
         tools = state.tools
         next_state = state
-        if os.getenv("AGENT_DEBUG") == "1":
-            logger = get_logger(__name__)
-            logger.info(
-                "planner: prompt_present=%s rag_retriever=%s rag_present=%s",
-                bool(next_state.prompt),
-                bool(self._rag_retriever),
-                bool(next_state.rag),
-            )
+        logger = get_logger(__name__)
+        logger.debug(
+            "planner: prompt_present=%s rag_retriever=%s rag_present=%s",
+            bool(next_state.prompt),
+            bool(self._rag_retriever),
+            bool(next_state.rag),
+        )
         if next_state.prompt and self._rag_retriever and next_state.rag is None:
             try:
-                if os.getenv("AGENT_DEBUG") == "1":
-                    logger = get_logger(__name__)
-                    logger.info("planner: retrieving rag context")
+                logger.debug("planner: retrieving rag context")
                 rag_context = self._rag_retriever.retrieve(
                     next_state.prompt,
                     recorder=next_state.recorder,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import replace
 from typing import Callable
 
@@ -57,13 +56,12 @@ class LlmNodeBase:
                 ),
             )
         logger = get_logger(__name__)
-        if os.getenv("AGENT_DEBUG") == "1" or os.getenv("LLM_DEBUG") == "1":
-            logger.info(
-                "llm request node=%s model=%s messages=%s",
-                agent_node,
-                effective_request.model_id,
-                json.dumps([m.content for m in effective_request.messages], default=str),
-            )
+        logger.debug(
+            "llm request node=%s model=%s messages=%s",
+            agent_node,
+            effective_request.model_id,
+            json.dumps([m.content for m in effective_request.messages], default=str),
+        )
         with self._tracer.start_as_current_span("llm.node.call") as span:
             span.set_attribute("model_id", effective_request.model_id)
             span.set_attribute("agent_node", agent_node)
@@ -118,16 +116,15 @@ class LlmNodeBase:
             self._llm_tokens_output_total.add(response.tokens_output, metric_attrs)
             self._llm_cost_usd_total.add(float(cost_usd), metric_attrs)
             self._llm_call_latency_ms.record(response.latency_ms, metric_attrs)
-        if os.getenv("AGENT_DEBUG") == "1" or os.getenv("LLM_DEBUG") == "1":
-            logger.info(
-                "llm response node=%s tokens_in=%s tokens_out=%s cost_usd=%s error=%s output=%s",
-                agent_node,
-                response.tokens_input,
-                response.tokens_output,
-                cost_usd,
-                getattr(response.error, "message", None),
-                json.dumps(response.output.json, default=str),
-            )
+        logger.debug(
+            "llm response node=%s tokens_in=%s tokens_out=%s cost_usd=%s error=%s output=%s",
+            agent_node,
+            response.tokens_input,
+            response.tokens_output,
+            cost_usd,
+            getattr(response.error, "message", None),
+            json.dumps(response.output.json, default=str),
+        )
         if recorder:
             recorder.record_llm_call(
                 agent_node=agent_node,

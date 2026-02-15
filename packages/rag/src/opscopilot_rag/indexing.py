@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import logging
+
 from opensearchpy import OpenSearch
 from opensearchpy.helpers import bulk
 
 from .types import Chunk, EmbeddingResult, IndexedChunk
+
+logger = logging.getLogger(__name__)
 
 
 def build_index_documents(
     chunks: list[Chunk],
     embeddings: EmbeddingResult,
 ) -> list[IndexedChunk]:
+    logger.info(
+        "Building index documents chunks=%d embedding_vectors=%d",
+        len(chunks),
+        len(embeddings.vectors),
+    )
     if len(chunks) != len(embeddings.vectors):
         raise ValueError("chunks and embeddings length mismatch")
 
@@ -34,6 +43,11 @@ def bulk_upsert_chunks(
     index_name: str,
     documents: list[IndexedChunk],
 ) -> int:
+    logger.info(
+        "Upserting chunks into OpenSearch index=%s documents=%d",
+        index_name,
+        len(documents),
+    )
     actions = []
     for doc in documents:
         actions.append(
@@ -53,4 +67,9 @@ def bulk_upsert_chunks(
             }
         )
     success, _ = bulk(client, actions)
+    logger.debug(
+        "OpenSearch bulk upsert completed index=%s success=%d",
+        index_name,
+        success,
+    )
     return success

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 
 from opentelemetry import metrics, propagate, trace
@@ -49,13 +48,12 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
     tool_call_latency_ms = meter.create_histogram("tool_call_latency_ms")
     results: list[ToolResult] = []
     for step in plan.steps:
-        if os.getenv("AGENT_DEBUG") == "1":
-            logger.info(
-                "tool_executor step=%s tool=%s args=%s",
-                step.step_id,
-                step.tool_name,
-                json.dumps(step.args, default=str),
-            )
+        logger.debug(
+            "tool_executor step=%s tool=%s args=%s",
+            step.step_id,
+            step.tool_name,
+            json.dumps(step.args, default=str),
+        )
         with tracer.start_as_current_span("tool.call") as span:
             span.set_attribute("tool_name", step.tool_name)
             if recorder:
@@ -77,13 +75,12 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
             tool_call_latency_ms.record(latency_ms, metric_attrs)
             if status != "success":
                 tool_call_errors_total.add(1, {"tool_name": step.tool_name})
-        if os.getenv("AGENT_DEBUG") == "1":
-            logger.info(
-                "tool_executor result step=%s tool=%s response=%s",
-                step.step_id,
-                step.tool_name,
-                json.dumps(response, default=str),
-            )
+        logger.debug(
+            "tool_executor result step=%s tool=%s response=%s",
+            step.step_id,
+            step.tool_name,
+            json.dumps(response, default=str),
+        )
         if recorder:
             recorder.record_tool_call(step.tool_name, step.args, response)
         results.append(

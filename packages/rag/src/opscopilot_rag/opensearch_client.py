@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import os
+import logging
 
 from opensearchpy import OpenSearch
 
 from .types import OpenSearchConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _read_env(name: str, fallback: str | None = None) -> str | None:
@@ -40,6 +43,12 @@ def opensearch_config_from_env() -> OpenSearchConfig:
 class OpenSearchClient:
     def __init__(self, config: OpenSearchConfig | None = None) -> None:
         self.config = config or opensearch_config_from_env()
+        logger.info(
+            "Initializing OpenSearch client for index=%s url=%s verify_certs=%s",
+            self.config.index,
+            self.config.url,
+            self.config.verify_certs,
+        )
         http_auth = None
         if self.config.username and self.config.password:
             http_auth = (self.config.username, self.config.password)
@@ -78,5 +87,11 @@ def build_index_body(dimensions: int) -> dict:
 
 def ensure_index(client: OpenSearch, index_name: str, dimensions: int) -> None:
     if client.indices.exists(index=index_name):
+        logger.debug("OpenSearch index already exists index=%s", index_name)
         return
+    logger.info(
+        "Creating OpenSearch index index=%s dimensions=%d",
+        index_name,
+        dimensions,
+    )
     client.indices.create(index=index_name, body=build_index_body(dimensions))

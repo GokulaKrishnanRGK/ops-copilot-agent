@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 
@@ -12,6 +13,8 @@ from opscopilot_llm_gateway.types import EmbeddingRequest, EmbeddingResponse, Ll
 
 from .types import EmbeddingRequest as RagEmbeddingRequest
 from .types import EmbeddingResult
+
+logger = logging.getLogger(__name__)
 
 
 def _read_env(name: str) -> str:
@@ -61,6 +64,11 @@ class OpenAIEmbeddingAdapter(EmbeddingAdapter):
         self.ledger = ledger or CostLedger()
 
     def embed(self, request: RagEmbeddingRequest) -> EmbeddingResult:
+        logger.info(
+            "Running embedding request model=%s texts=%d",
+            self.model,
+            len(request.texts),
+        )
         tags = LlmTags(session_id="rag", agent_run_id="rag", agent_node="rag")
         gateway_request = EmbeddingRequest(
             model_id=self.model,
@@ -76,6 +84,12 @@ class OpenAIEmbeddingAdapter(EmbeddingAdapter):
             ledger=self.ledger,
         )
         dimensions = len(response.vectors[0]) if response.vectors else 0
+        logger.debug(
+            "Embedding request completed model=%s vectors=%d dimensions=%d",
+            self.model,
+            len(response.vectors),
+            dimensions,
+        )
         return EmbeddingResult(
             vectors=response.vectors,
             model_id=self.model,
