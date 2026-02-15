@@ -62,9 +62,9 @@ host_kube="${KUBECONFIG_PATH:-$HOME/.kube/config}"
 kube_tmp="$(mktemp)"
 cleanup() {
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server otel-collector
   fi
-  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" down
+  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" down
   rm -f "$kube_tmp"
 #  if kind get clusters | grep -q "^${cluster_name}$"; then
 #    kind delete cluster --name "${cluster_name}"
@@ -89,6 +89,7 @@ fi
 
 export K8S_ALLOWED_NAMESPACES="${K8S_ALLOWED_NAMESPACES:-default}"
 export MCP_BASE_URL="${MCP_BASE_URL:-http://localhost:8080/mcp}"
+export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
 export OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
 export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-root}@localhost:5432/${POSTGRES_DB:-opscopilot}}"
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
@@ -105,7 +106,22 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
 fi
 
 KUBECONFIG_PATH="$kube_tmp" \
-  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" up -d --build
+  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" up -d --build
+
+for _ in {1..20}; do
+  if curl -sf "http://localhost:13133/" >/dev/null; then
+    break
+  fi
+  sleep 1
+done
+
+if ! curl -sf "http://localhost:13133/" >/dev/null; then
+  echo "otel-collector failed health check" >&2
+  if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color otel-collector
+  fi
+  exit 1
+fi
 
 for _ in {1..20}; do
   if curl -sf "http://localhost:8080/health" >/dev/null; then
@@ -117,7 +133,7 @@ done
 if ! curl -sf "http://localhost:8080/health" >/dev/null; then
   echo "tool-server failed health check" >&2
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server otel-collector
   fi
   exit 1
 fi
@@ -133,7 +149,7 @@ done
 if ! docker exec compose-postgres-1 pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-opscopilot}" >/dev/null 2>&1; then
   echo "postgres failed health check" >&2
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server otel-collector
   fi
   exit 1
 fi
@@ -148,7 +164,7 @@ done
 if ! curl -skf -u "${OPENSEARCH_USERNAME}:${OPENSEARCH_PASSWORD}" "${OPENSEARCH_URL}" >/dev/null; then
   echo "opensearch failed health check at ${OPENSEARCH_URL} with user ${OPENSEARCH_USERNAME}" >&2
   if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
+    docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server otel-collector
   fi
   exit 1
 fi
@@ -217,7 +233,7 @@ if [ $status -eq 0 ]; then
 fi
 
 if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
-  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server
+  docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" logs --no-color tool-server otel-collector
 fi
 echo "integration summary: ${summary[*]}"
 exit $status

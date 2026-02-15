@@ -144,6 +144,20 @@ The system emits:
 
 Local deployments include an OpenTelemetry collector for inspection.
 
+Run collector locally:
+
+- `make observability-up`
+- Collector health: `http://localhost:13133/`
+- OTLP HTTP endpoint: `http://localhost:4318`
+- Prometheus metrics endpoint: `http://localhost:8889/metrics`
+
+Runtime export configuration:
+
+- Set `OTEL_EXPORTER_OTLP_ENDPOINT` to the OTLP base URL, for example `http://localhost:4318`.
+- Endpoint validation is strict: URL must be `http(s)` and must not include a path like `/v1/traces`.
+- The tool-server also uses `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_SERVICE_NAME` for trace export.
+- Invalid endpoint values fail fast at startup.
+
 ---
 
 ## Constraints and Safety

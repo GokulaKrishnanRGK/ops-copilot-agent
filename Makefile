@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down rag-ingest run-api run-tool-server run-local
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down observability-up observability-down rag-ingest run-api run-tool-server run-local
 
 build:
 	cd apps/web && npm run build
@@ -86,6 +86,12 @@ opensearch-up:
 opensearch-down:
 	docker compose --env-file .env -f deploy/compose/opensearch.yml down
 
+observability-up:
+	docker compose --env-file .env -f deploy/compose/observability.yml up -d
+
+observability-down:
+	docker compose --env-file .env -f deploy/compose/observability.yml down
+
 rag-ingest:
 	opscopilot-rag-ingest --root packages/rag/sample_docs --extensions .md,.txt
 
@@ -97,9 +103,12 @@ run-tool-server:
 
 run-local:
 	@set -e; \
-	( cd apps/tool-server && TOOL_SERVER_ADDR=":$${TOOL_SERVER_PORT:-8080}" go run ./cmd/tool-server ) & \
-	tool_pid=$$!; \
-	( cd apps/api && uvicorn opscopilot_api.main:app --host 0.0.0.0 --port $${API_PORT:-8000} --reload ) & \
+	docker compose --env-file .env -f deploy/compose/opensearch.yml -f deploy/compose/observability.yml up -d; \
+	export OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"; \
+	export OTEL_EXPORTER_OTLP_PROTOCOL="$${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}"; \
+	( cd apps/api && OTEL_SERVICE_NAME="$${OTEL_SERVICE_NAME_API:-ops-copilot-api}" uvicorn opscopilot_api.main:app --host 0.0.0.0 --port $${API_PORT:-8000} --reload ) & \
 	api_pid=$$!; \
+	( cd apps/tool-server && OTEL_SERVICE_NAME="$${OTEL_SERVICE_NAME_TOOL_SERVER:-ops-copilot-tool-server}" TOOL_SERVER_ADDR=":$${TOOL_SERVER_PORT:-8080}" go run ./cmd/tool-server ) & \
+	tool_pid=$$!; \
 	trap 'kill $$tool_pid $$api_pid 2>/dev/null || true' INT TERM EXIT; \
 	wait $$tool_pid $$api_pid

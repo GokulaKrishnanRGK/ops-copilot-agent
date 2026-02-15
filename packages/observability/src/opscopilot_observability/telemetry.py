@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
@@ -13,6 +14,22 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import NoOpTracerProvider
 
 _configured = False
+
+
+def _validated_otlp_endpoint(raw_endpoint: str) -> str:
+    parsed = urlparse(raw_endpoint)
+    if parsed.scheme not in {"http", "https"}:
+        raise RuntimeError("OTEL_EXPORTER_OTLP_ENDPOINT must start with http:// or https://")
+    if not parsed.netloc:
+        raise RuntimeError("OTEL_EXPORTER_OTLP_ENDPOINT must include host and port")
+    if parsed.path not in {"", "/"}:
+        raise RuntimeError(
+            "OTEL_EXPORTER_OTLP_ENDPOINT must be the OTLP base URL only (no path), "
+            "for example http://localhost:4318"
+        )
+    if parsed.query or parsed.params or parsed.fragment:
+        raise RuntimeError("OTEL_EXPORTER_OTLP_ENDPOINT must not include query, params, or fragment")
+    return raw_endpoint.rstrip("/")
 
 
 def configure_telemetry(default_service_name: str = "ops-copilot") -> None:
@@ -28,6 +45,7 @@ def configure_telemetry(default_service_name: str = "ops-copilot") -> None:
     if not endpoint:
         _configured = True
         return
+    endpoint = _validated_otlp_endpoint(endpoint)
 
     service_name = os.getenv("OTEL_SERVICE_NAME", default_service_name)
     resource = Resource.create({"service.name": service_name})
