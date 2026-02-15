@@ -17,7 +17,7 @@ from .event_mapper import (
     agent_run_started,
     runtime_event,
 )
-from opscopilot_api.logging import reset_log_context, set_log_context
+from opscopilot_api.logging import clear_log_context, set_log_context
 from .runtime_factory import RuntimeFactory
 from .stream_decisions import (
     StreamEventDecider,
@@ -159,7 +159,7 @@ class ChatService:
 
         run_id = str(uuid4())
         started = time.perf_counter()
-        context_tokens = set_log_context(session_id=session_id, agent_run_id=run_id)
+        set_log_context(session_id=session_id, agent_run_id=run_id)
         try:
             with self._tracer.start_as_current_span("chat.run") as span:
                 span.set_attribute("session_id", session_id)
@@ -237,7 +237,7 @@ class ChatService:
                 (time.perf_counter() - started) * 1000.0,
                 {"entrypoint": "run"},
             )
-            reset_log_context(context_tokens)
+            clear_log_context()
 
     def run_stream(self, session_id: str, prompt: str):
         session = self._session_repo.get(session_id)
@@ -260,7 +260,7 @@ class ChatService:
 
         def _stream():
             started = time.perf_counter()
-            context_tokens = set_log_context(session_id=session_id, agent_run_id=run_id)
+            set_log_context(session_id=session_id, agent_run_id=run_id)
             try:
                 with self._tracer.start_as_current_span("chat.run_stream") as span:
                     span.set_attribute("session_id", session_id)
@@ -276,81 +276,81 @@ class ChatService:
                     queue: Queue = Queue()
                     done = object()
 
-                def on_llm_delta(node: str, text: str) -> None:
-                    events = decider.llm_delta_events(
-                        session_id=session_id,
-                        run_id=run_id,
-                        node=node,
-                        text=text,
-                        tracker=tracker,
-                    )
-                    for event in events:
-                        queue.put(event)
+                    def on_llm_delta(node: str, text: str) -> None:
+                        events = decider.llm_delta_events(
+                            session_id=session_id,
+                            run_id=run_id,
+                            node=node,
+                            text=text,
+                            tracker=tracker,
+                        )
+                        for event in events:
+                            queue.put(event)
 
-                def worker():
-                    try:
-                        answer_emitted = False
-                        last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
-                        for state in runtime.run_stream(
-                            AgentState(
-                                prompt=prompt,
-                                prompt_history=prompt_history,
-                                llm_stream_callback=on_llm_delta,
-                            )
-                        ):
-                            last_state = state
-                            if state.event is not None:
-                                if state.event.event_type == "tool_executor.completed":
-                                    for log_event in self._tool_log_events(
+                    def worker():
+                        try:
+                            answer_emitted = False
+                            last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
+                            for state in runtime.run_stream(
+                                AgentState(
+                                    prompt=prompt,
+                                    prompt_history=prompt_history,
+                                    llm_stream_callback=on_llm_delta,
+                                )
+                            ):
+                                last_state = state
+                                if state.event is not None:
+                                    if state.event.event_type == "tool_executor.completed":
+                                        for log_event in self._tool_log_events(
+                                            session_id=session_id,
+                                            run_id=run_id,
+                                            tool_results=state.tool_results,
+                                        ):
+                                            queue.put(log_event)
+                                    events = decider.runtime_events(
                                         session_id=session_id,
                                         run_id=run_id,
-                                        tool_results=state.tool_results,
-                                    ):
-                                        queue.put(log_event)
-                                events = decider.runtime_events(
-                                    session_id=session_id,
-                                    run_id=run_id,
-                                    event_type=state.event.event_type,
-                                    payload=state.event.payload or {},
-                                    tracker=tracker,
-                                    answer_message=state.answer,
+                                        event_type=state.event.event_type,
+                                        payload=state.event.payload or {},
+                                        tracker=tracker,
+                                        answer_message=state.answer,
+                                    )
+                                    for event in events:
+                                        queue.put(event)
+                                terminal_item, answer_emitted = terminal_item_from_state(
+                                    state=state,
+                                    answer_emitted=answer_emitted,
+                                    is_clarification=self._is_clarification,
                                 )
-                                for event in events:
-                                    queue.put(event)
-                            terminal_item, answer_emitted = terminal_item_from_state(
-                                state=state,
-                                answer_emitted=answer_emitted,
-                                is_clarification=self._is_clarification,
-                            )
-                            if terminal_item is not None:
-                                queue.put(terminal_item)
-                                return
+                                if terminal_item is not None:
+                                    queue.put(terminal_item)
+                                    return
 
-                        if last_state.answer:
-                            queue.put({"__terminal__": "answer", "message": last_state.answer})
-                            return
-                        message = "agent runtime completed without an assistant response"
-                        queue.put(
-                            {
-                                "__terminal__": "error",
-                                "message": message,
-                                "failure_type": "runtime_error",
-                                "context": {"type": "runtime_error", "message": message},
-                            }
-                        )
-                    except Exception as exc:
-                        span.record_exception(exc)
-                        self._logger.exception("chat stream runtime failed")
-                        message = str(exc) or "agent runtime failed"
-                        queue.put(
-                            {
-                                "__terminal__": "error",
-                                "message": message,
-                                "failure_type": "runtime_error",
-                                "context": {"type": "runtime_error", "message": message},
-                            }
-                        )
-                        queue.put(done)
+                            if last_state.answer:
+                                queue.put({"__terminal__": "answer", "message": last_state.answer})
+                                return
+                            message = "agent runtime completed without an assistant response"
+                            queue.put(
+                                {
+                                    "__terminal__": "error",
+                                    "message": message,
+                                    "failure_type": "runtime_error",
+                                    "context": {"type": "runtime_error", "message": message},
+                                }
+                            )
+                        except Exception as exc:
+                            span.record_exception(exc)
+                            self._logger.exception("chat stream runtime failed")
+                            message = str(exc) or "agent runtime failed"
+                            queue.put(
+                                {
+                                    "__terminal__": "error",
+                                    "message": message,
+                                    "failure_type": "runtime_error",
+                                    "context": {"type": "runtime_error", "message": message},
+                                }
+                            )
+                            queue.put(done)
 
                     thread = threading.Thread(target=worker, daemon=True)
                     thread.start()
@@ -412,6 +412,6 @@ class ChatService:
                 self._logger.info(
                     "chat stream finished",
                 )
-                reset_log_context(context_tokens)
+                clear_log_context()
 
         return _stream()
