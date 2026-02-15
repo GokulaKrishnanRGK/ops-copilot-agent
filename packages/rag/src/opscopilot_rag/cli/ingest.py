@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from typing import Iterable
@@ -11,6 +12,8 @@ from opscopilot_rag.indexing import build_index_documents, bulk_upsert_chunks
 from opscopilot_rag.ingestion import load_documents
 from opscopilot_rag.opensearch_client import OpenSearchClient
 from opscopilot_rag.types import EmbeddingRequest, EmbeddingResult, OpenSearchConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_bool(value: str | None) -> bool:
@@ -48,20 +51,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def ingest_documents(args: argparse.Namespace) -> int:
-    debug = os.getenv("RAG_DEBUG") == "1"
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
     extensions = None
     if args.extensions:
         extensions = [ext.strip() for ext in args.extensions.split(",") if ext.strip()]
 
-    if debug:
-        print(f"ingest: root={args.root}")
-        print(f"ingest: extensions={extensions}")
+    logger.debug("ingest: root=%s", args.root)
+    logger.debug("ingest: extensions=%s", extensions)
     documents = load_documents(args.root, extensions=extensions)
     if not documents:
         print("No documents found to ingest.")
         return 1
-    if debug:
-        print(f"ingest: documents={len(documents)}")
+    logger.debug("ingest: documents=%d", len(documents))
 
     chunks = []
     for doc in documents:
@@ -78,8 +79,7 @@ def ingest_documents(args: argparse.Namespace) -> int:
     if not chunks:
         print("No chunks created from documents.")
         return 1
-    if debug:
-        print(f"ingest: chunks={len(chunks)}")
+    logger.debug("ingest: chunks=%d", len(chunks))
 
     if args.opensearch_url and args.opensearch_index:
         config = OpenSearchConfig(
@@ -113,12 +113,10 @@ def ingest_documents(args: argparse.Namespace) -> int:
         model_id=model_id or "unknown",
         dimensions=dimensions,
     )
-    if debug:
-        print(f"ingest: embeddings={len(vectors)} dims={dimensions}")
+    logger.debug("ingest: embeddings=%d dims=%d", len(vectors), dimensions)
     documents_to_index = build_index_documents(chunks, embeddings=embeddings_result)
     indexed = bulk_upsert_chunks(os_client.client, os_client.config.index, documents_to_index)
-    if debug:
-        print(f"ingest: indexed={indexed} index={os_client.config.index}")
+    logger.debug("ingest: indexed=%d index=%s", indexed, os_client.config.index)
     print(f"Ingested {indexed} chunks into index '{os_client.config.index}'.")
     return 0
 

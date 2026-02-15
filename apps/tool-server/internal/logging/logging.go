@@ -1,22 +1,28 @@
-package main
+package logging
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
-type linePrefixWriter struct {
-	mu       sync.Mutex
-	writer   io.Writer
-	buffered string
-}
+var logger = slog.Default()
+
+type ctxKey string
+
+const (
+	sessionIDKey  ctxKey = "session_id"
+	agentRunIDKey ctxKey = "agent_run_id"
+)
 
 type dailyRotatingFile struct {
 	mu         sync.Mutex
@@ -105,45 +111,79 @@ func safeRename(src string, dst string) error {
 	return os.Rename(src, target)
 }
 
-func (w *linePrefixWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.buffered += string(p)
-	lines := strings.Split(w.buffered, "\n")
-	w.buffered = lines[len(lines)-1]
-	for i := 0; i < len(lines)-1; i++ {
-		line := lines[i]
-		if err := w.writeLine(line); err != nil {
-			return 0, err
-		}
+func resolveLevel() slog.Level {
+	raw := strings.TrimSpace(os.Getenv("LOG_LEVEL"))
+	if raw == "" {
+		return slog.LevelInfo
 	}
-	return len(p), nil
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(strings.ToUpper(raw))); err != nil {
+		return slog.LevelInfo
+	}
+	return level
 }
 
-func (w *linePrefixWriter) writeLine(line string) error {
-	ts := time.Now().Local().Format("2006-01-02T15:04:05-0700")
-	prefix := fmt.Sprintf("ts=%s service=tool-server thread_id=%d ", ts, currentThreadID())
-	_, err := io.WriteString(w.writer, prefix+line+"\n")
-	return err
-}
-
-func configureLogging() {
+func Configure() {
 	logPath := os.Getenv("TOOL_SERVER_LOG_FILE")
 	if logPath == "" {
-		log.Fatal("TOOL_SERVER_LOG_FILE is required")
+		panic("TOOL_SERVER_LOG_FILE is required")
 	}
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		log.Fatalf("failed to create log directory: %v", err)
+		panic(fmt.Sprintf("failed to create log directory: %v", err))
 	}
 
 	rotatingFile, err := newDailyRotatingFile(logPath)
 	if err != nil {
-		log.Fatalf("failed to initialize rotating log file: %v", err)
+		panic(fmt.Sprintf("failed to initialize rotating log file: %v", err))
 	}
 
-	multi := io.MultiWriter(os.Stdout, rotatingFile)
-	log.SetFlags(0)
-	log.SetOutput(&linePrefixWriter{writer: multi})
-	log.SetPrefix("")
+	writer := io.MultiWriter(os.Stdout, rotatingFile)
+	handler := slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: resolveLevel()})
+	logger = slog.New(handler).With("service", "tool-server", "component", "tool-server")
+	slog.SetDefault(logger)
+}
+
+func WithRunContext(ctx context.Context, sessionID string, agentRunID string) context.Context {
+	next := context.WithValue(ctx, sessionIDKey, sessionID)
+	return context.WithValue(next, agentRunIDKey, agentRunID)
+}
+
+func Debug(ctx context.Context, message string, args ...any) {
+	logWithContext(ctx, logger.DebugContext, message, args...)
+}
+
+func Info(ctx context.Context, message string, args ...any) {
+	logWithContext(ctx, logger.InfoContext, message, args...)
+}
+
+func Error(ctx context.Context, message string, args ...any) {
+	logWithContext(ctx, logger.ErrorContext, message, args...)
+}
+
+func logWithContext(
+	ctx context.Context,
+	write func(context.Context, string, ...any),
+	message string,
+	args ...any,
+) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	spanContext := trace.SpanContextFromContext(ctx)
+	traceID := ""
+	spanID := ""
+	if spanContext.IsValid() {
+		traceID = spanContext.TraceID().String()
+		spanID = spanContext.SpanID().String()
+	}
+	sessionID, _ := ctx.Value(sessionIDKey).(string)
+	agentRunID, _ := ctx.Value(agentRunIDKey).(string)
+	attrs := []any{
+		"trace_id", traceID,
+		"span_id", spanID,
+		"session_id", sessionID,
+		"agent_run_id", agentRunID,
+	}
+	attrs = append(attrs, args...)
+	write(ctx, message, attrs...)
 }

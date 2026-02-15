@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/ops-copilot/tool-server/internal/logging"
 )
 
 type listPodsInput struct {
@@ -52,9 +53,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace":      input.Namespace,
 				"label_selector": input.LabelSelector,
 			}
-			debugLogf("mcp tool_call name=k8s.list_pods args=%v", payload)
-			resp := runToolRequest("k8s.list_pods", payload)
-			debugLogf("mcp tool_result name=k8s.list_pods status=%s error=%v", resp.Status, resp.Error)
+			resp := runToolRequest(ctx, "k8s.list_pods", payload)
 			return nil, resp, nil
 		}),
 	)
@@ -65,9 +64,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace": input.Namespace,
 				"pod_name":  input.PodName,
 			}
-			debugLogf("mcp tool_call name=k8s.describe_pod args=%v", payload)
-			resp := runToolRequest("k8s.describe_pod", payload)
-			debugLogf("mcp tool_result name=k8s.describe_pod status=%s error=%v", resp.Status, resp.Error)
+			resp := runToolRequest(ctx, "k8s.describe_pod", payload)
 			return nil, resp, nil
 		}),
 	)
@@ -78,9 +75,7 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace": input.Namespace,
 				"pod_name":  input.PodName,
 			}
-			debugLogf("mcp tool_call name=k8s.get_pod_events args=%v", payload)
-			resp := runToolRequest("k8s.get_pod_events", payload)
-			debugLogf("mcp tool_result name=k8s.get_pod_events status=%s error=%v", resp.Status, resp.Error)
+			resp := runToolRequest(ctx, "k8s.get_pod_events", payload)
 			return nil, resp, nil
 		}),
 	)
@@ -97,9 +92,7 @@ func registerMCPTools(server *mcp.Server) {
 			if input.TailLines > 0 {
 				payload["tail_lines"] = input.TailLines
 			}
-			debugLogf("mcp tool_call name=k8s.get_pod_logs args=%v", payload)
-			resp := runToolRequest("k8s.get_pod_logs", payload)
-			debugLogf("mcp tool_result name=k8s.get_pod_logs status=%s error=%v", resp.Status, resp.Error)
+			resp := runToolRequest(ctx, "k8s.get_pod_logs", payload)
 			return nil, resp, nil
 		}),
 	)
@@ -110,21 +103,22 @@ func registerMCPTools(server *mcp.Server) {
 				"namespace":       input.Namespace,
 				"deployment_name": input.DeploymentName,
 			}
-			debugLogf("mcp tool_call name=k8s.describe_deployment args=%v", payload)
-			resp := runToolRequest("k8s.describe_deployment", payload)
-			debugLogf("mcp tool_result name=k8s.describe_deployment status=%s error=%v", resp.Status, resp.Error)
+			resp := runToolRequest(ctx, "k8s.describe_deployment", payload)
 			return nil, resp, nil
 		}),
 	)
 }
 
-func runToolRequest(toolName string, args map[string]any) toolResponse {
+func runToolRequest(ctx context.Context, toolName string, args map[string]any) toolResponse {
+	logging.Info(ctx, "mcp tool_call", "tool_name", toolName, "args", args)
 	req := toolRequest{
 		ToolName: toolName,
 		Args:     args,
 		Timeout:  toolTimeoutMs(),
 	}
-	return executeTool(req)
+	resp := executeTool(req)
+	logging.Info(ctx, "mcp tool_result", "tool_name", toolName, "status", resp.Status, "error", resp.Error)
+	return resp
 }
 
 func toolTimeoutMs() int {

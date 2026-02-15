@@ -3,6 +3,7 @@ from langgraph.errors import GraphRecursionError
 from opscopilot_agent_runtime.graph import AgentGraph
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.limits import ExecutionLimits, validate_limits
+from opscopilot_agent_runtime.runtime.logging import clear_log_context, set_log_context
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -23,6 +24,7 @@ class AgentRuntime:
         config_json = {"limits": {"max_agent_steps": self._limits.max_agent_steps}}
         if recorder:
             recorder.start(config_json)
+            set_log_context(recorder.session_id, recorder.run_id)
         next_state = state
         if state.prompt:
             history = list(state.prompt_history or [])
@@ -70,3 +72,5 @@ class AgentRuntime:
             if recorder:
                 recorder.finish("failed")
             raise
+        finally:
+            clear_log_context()

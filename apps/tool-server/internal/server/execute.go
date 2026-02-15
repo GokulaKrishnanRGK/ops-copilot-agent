@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/ops-copilot/tool-server/internal/k8s"
+	"github.com/ops-copilot/tool-server/internal/logging"
 	"go.opentelemetry.io/otel/propagation"
 )
 
 func executeTool(req toolRequest) toolResponse {
-	debugLogf("tool execute start name=%s args=%v timeout_ms=%d", req.ToolName, req.Args, req.Timeout)
 	ctx := context.Background()
 	traceparent, ok := req.Args["__traceparent"].(string)
 	if ok && traceparent != "" {
@@ -24,13 +24,27 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	sessionID, _ := req.Args["__session_id"].(string)
 	runID, _ := req.Args["__agent_run_id"].(string)
+	ctx = logging.WithRunContext(ctx, sessionID, runID)
+	logging.Info(
+		ctx,
+		"tool execute start",
+		"tool_name", req.ToolName,
+		"args", req.Args,
+		"timeout_ms", req.Timeout,
+	)
 	delete(req.Args, "__traceparent")
 	delete(req.Args, "__tracestate")
 	delete(req.Args, "__session_id")
 	delete(req.Args, "__agent_run_id")
 	handler, ok := toolRegistry[req.ToolName]
 	if !ok {
-		debugLogf("tool execute error name=%s reason=tool_not_implemented", req.ToolName)
+		logging.Error(
+			ctx,
+			"tool execute error",
+			"tool_name", req.ToolName,
+			"reason", "tool_not_implemented",
+			"result_status", "error",
+		)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -42,7 +56,13 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	namespace, _ := req.Args["namespace"].(string)
 	if namespace == "" {
-		debugLogf("tool execute error name=%s reason=namespace_required", req.ToolName)
+		logging.Error(
+			ctx,
+			"tool execute error",
+			"tool_name", req.ToolName,
+			"reason", "namespace_required",
+			"result_status", "error",
+		)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -54,7 +74,14 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	allowed := k8s.ParseAllowlist(os.Getenv("K8S_ALLOWED_NAMESPACES"))
 	if !k8s.IsAllowed(allowed, namespace) {
-		debugLogf("tool execute error name=%s reason=namespace_not_allowed namespace=%s", req.ToolName, namespace)
+		logging.Error(
+			ctx,
+			"tool execute error",
+			"tool_name", req.ToolName,
+			"reason", "namespace_not_allowed",
+			"namespace", namespace,
+			"result_status", "error",
+		)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -66,7 +93,14 @@ func executeTool(req toolRequest) toolResponse {
 	}
 	client, err := k8s.NewClient()
 	if err != nil {
-		debugLogf("tool execute error name=%s reason=client_init_failed err=%v", req.ToolName, err)
+		logging.Error(
+			ctx,
+			"tool execute error",
+			"tool_name", req.ToolName,
+			"reason", "client_init_failed",
+			"error", err.Error(),
+			"result_status", "error",
+		)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -87,7 +121,14 @@ func executeTool(req toolRequest) toolResponse {
 			"agent_run_id":  runID,
 			"result_status": "error",
 		})
-		debugLogf("tool execute error name=%s namespace=%s err=%v", req.ToolName, namespace, toolErr)
+		logging.Error(
+			ctx,
+			"tool execute error",
+			"tool_name", req.ToolName,
+			"namespace", namespace,
+			"error", toolErr.Message,
+			"result_status", "error",
+		)
 		return toolResponse{
 			ToolName:  req.ToolName,
 			Status:    "error",
@@ -106,7 +147,14 @@ func executeTool(req toolRequest) toolResponse {
 		"result_status": "success",
 		"truncated":     didTruncate,
 	})
-	debugLogf("tool execute success name=%s namespace=%s truncated=%t", req.ToolName, namespace, didTruncate)
+	logging.Info(
+		ctx,
+		"tool execute success",
+		"tool_name", req.ToolName,
+		"namespace", namespace,
+		"truncated", didTruncate,
+		"result_status", "success",
+	)
 	return toolResponse{
 		ToolName:  req.ToolName,
 		Status:    "success",

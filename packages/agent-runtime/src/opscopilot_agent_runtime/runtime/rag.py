@@ -79,11 +79,10 @@ class RagRetriever:
           (time.perf_counter() - started) * 1000.0,
           {"index": self._config.index},
       )
-      if os.getenv("AGENT_DEBUG") == "1":
-        logger.info(
-            "rag retrieved %d chunks index=%s top_k=%d",
-            len(results),
-            self._config.index,
-            self._top_k,
-        )
+      logger.debug(
+          "rag retrieved %d chunks index=%s top_k=%d",
+          len(results),
+          self._config.index,
+          self._top_k,
+      )
       return RagContext(text="\n".join(context_lines), results=results, citations=citations)

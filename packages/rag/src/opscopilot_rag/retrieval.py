@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from opentelemetry import trace
 from opensearchpy import OpenSearch
 
 from .types import RetrievalResult
+
+logger = logging.getLogger(__name__)
 
 
 def build_knn_query(
@@ -33,6 +37,12 @@ def retrieve_knn(
     vector: list[float],
     top_k: int,
 ) -> list[RetrievalResult]:
+    logger.info(
+        "Executing KNN retrieval index=%s top_k=%d vector_dims=%d",
+        index_name,
+        top_k,
+        len(vector),
+    )
     tracer = trace.get_tracer("opscopilot_rag")
     with tracer.start_as_current_span("rag.opensearch.search") as span:
         span.set_attribute("index", index_name)
@@ -54,4 +64,9 @@ def retrieve_knn(
                 )
             )
         span.set_attribute("retrieved_chunks", len(results))
+        logger.debug(
+            "KNN retrieval completed index=%s retrieved_chunks=%d",
+            index_name,
+            len(results),
+        )
         return results

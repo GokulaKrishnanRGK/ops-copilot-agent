@@ -4,6 +4,7 @@ from typing import Callable
 from queue import Empty, Queue
 import threading
 import time
+import logging
 from uuid import uuid4
 from opentelemetry import metrics, trace
 
@@ -16,6 +17,7 @@ from .event_mapper import (
     agent_run_started,
     runtime_event,
 )
+from opscopilot_api.logging import reset_log_context, set_log_context
 from .runtime_factory import RuntimeFactory
 from .stream_decisions import (
     StreamEventDecider,
@@ -53,6 +55,7 @@ class ChatService:
         self._runtime_factory = runtime_factory
         self._recorder_factory = recorder_factory
         self._tracer = trace.get_tracer("opscopilot_api.chat")
+        self._logger = logging.getLogger("opscopilot_api.chat")
         meter = metrics.get_meter("opscopilot_api.chat")
         self._agent_runs_total = meter.create_counter("agent_runs_total")
         self._agent_run_failures_total = meter.create_counter("agent_run_failures_total")
@@ -156,10 +159,12 @@ class ChatService:
 
         run_id = str(uuid4())
         started = time.perf_counter()
+        context_tokens = set_log_context(session_id=session_id, agent_run_id=run_id)
         try:
             with self._tracer.start_as_current_span("chat.run") as span:
                 span.set_attribute("session_id", session_id)
                 span.set_attribute("agent_run_id", run_id)
+                self._logger.info("chat run started")
                 self._agent_runs_total.add(1, {"entrypoint": "run"})
                 prompt_history = self._load_prompt_history(session_id)
                 now = datetime.now(timezone.utc)
@@ -179,6 +184,7 @@ class ChatService:
                     result = runtime.run(AgentState(prompt=prompt, prompt_history=prompt_history))
                 except Exception as exc:
                     span.record_exception(exc)
+                    self._logger.exception("chat run runtime failed")
                     self._agent_run_failures_total.add(
                         1,
                         {"entrypoint": "run", "failure_type": "runtime_error"},
@@ -226,10 +232,12 @@ class ChatService:
                     error=None if clarification else result.error,
                 )
         finally:
+            self._logger.info("chat run finished")
             self._agent_run_duration_ms.record(
                 (time.perf_counter() - started) * 1000.0,
                 {"entrypoint": "run"},
             )
+            reset_log_context(context_tokens)
 
     def run_stream(self, session_id: str, prompt: str):
         session = self._session_repo.get(session_id)
@@ -252,18 +260,21 @@ class ChatService:
 
         def _stream():
             started = time.perf_counter()
-            with self._tracer.start_as_current_span("chat.run_stream") as span:
-                span.set_attribute("session_id", session_id)
-                span.set_attribute("agent_run_id", run_id)
-                self._agent_runs_total.add(1, {"entrypoint": "run_stream"})
-                yield agent_run_started(session_id, run_id)
+            context_tokens = set_log_context(session_id=session_id, agent_run_id=run_id)
+            try:
+                with self._tracer.start_as_current_span("chat.run_stream") as span:
+                    span.set_attribute("session_id", session_id)
+                    span.set_attribute("agent_run_id", run_id)
+                    self._logger.info("chat stream started")
+                    self._agent_runs_total.add(1, {"entrypoint": "run_stream"})
+                    yield agent_run_started(session_id, run_id)
 
-                recorder = self._recorder_factory(session_id, run_id)
-                runtime = self._runtime_factory.create(recorder=recorder)
-                decider = StreamEventDecider()
-                tracker = StreamLifecycleTracker()
-                queue: Queue = Queue()
-                done = object()
+                    recorder = self._recorder_factory(session_id, run_id)
+                    runtime = self._runtime_factory.create(recorder=recorder)
+                    decider = StreamEventDecider()
+                    tracker = StreamLifecycleTracker()
+                    queue: Queue = Queue()
+                    done = object()
 
                 def on_llm_delta(node: str, text: str) -> None:
                     events = decider.llm_delta_events(
@@ -329,6 +340,7 @@ class ChatService:
                         )
                     except Exception as exc:
                         span.record_exception(exc)
+                        self._logger.exception("chat stream runtime failed")
                         message = str(exc) or "agent runtime failed"
                         queue.put(
                             {
@@ -340,61 +352,66 @@ class ChatService:
                         )
                         queue.put(done)
 
-                thread = threading.Thread(target=worker, daemon=True)
-                thread.start()
-                token_emitted = False
-                while True:
-                    try:
-                        item = queue.get(timeout=0.2)
-                    except Empty:
-                        if not thread.is_alive():
-                            break
-                        continue
-                    if isinstance(item, dict) and "__terminal__" in item:
-                        if item.get("__terminal__") == "error":
-                            failure_type = item.get("failure_type")
-                            failure_type_value = (
-                                failure_type
-                                if isinstance(failure_type, str) and failure_type
-                                else "runtime_error"
-                            )
-                            self._agent_run_failures_total.add(
-                                1,
-                                {"entrypoint": "run_stream", "failure_type": failure_type_value},
-                            )
-                        persistence, events = terminal_stream_events(
-                            terminal_item=item,
-                            session_id=session_id,
-                            run_id=run_id,
-                            token_emitted=token_emitted,
-                            chunk_text=self._chunk_text,
-                        )
-                        self._message_repo.create(
-                            models.Message(
-                                id=str(uuid4()),
+                    thread = threading.Thread(target=worker, daemon=True)
+                    thread.start()
+                    token_emitted = False
+                    while True:
+                        try:
+                            item = queue.get(timeout=0.2)
+                        except Empty:
+                            if not thread.is_alive():
+                                break
+                            continue
+                        if isinstance(item, dict) and "__terminal__" in item:
+                            if item.get("__terminal__") == "error":
+                                failure_type = item.get("failure_type")
+                                failure_type_value = (
+                                    failure_type
+                                    if isinstance(failure_type, str) and failure_type
+                                    else "runtime_error"
+                                )
+                                self._agent_run_failures_total.add(
+                                    1,
+                                    {"entrypoint": "run_stream", "failure_type": failure_type_value},
+                                )
+                            persistence, events = terminal_stream_events(
+                                terminal_item=item,
                                 session_id=session_id,
-                                role="assistant",
-                                content=persistence["message"],
-                                created_at=datetime.now(timezone.utc),
-                                metadata_json=(
-                                    {**(persistence["metadata"] or {}), "run_id": run_id}
-                                    if isinstance(persistence["metadata"], dict)
-                                    or persistence["metadata"] is None
-                                    else {"run_id": run_id}
-                                ),
+                                run_id=run_id,
+                                token_emitted=token_emitted,
+                                chunk_text=self._chunk_text,
                             )
-                        )
-                        for event in events:
-                            yield event
-                        break
-                    if item is done:
-                        break
-                    if item.get("type") == "assistant.token.delta":
-                        token_emitted = True
-                    yield item
-            self._agent_run_duration_ms.record(
-                (time.perf_counter() - started) * 1000.0,
-                {"entrypoint": "run_stream"},
-            )
+                            self._message_repo.create(
+                                models.Message(
+                                    id=str(uuid4()),
+                                    session_id=session_id,
+                                    role="assistant",
+                                    content=persistence["message"],
+                                    created_at=datetime.now(timezone.utc),
+                                    metadata_json=(
+                                        {**(persistence["metadata"] or {}), "run_id": run_id}
+                                        if isinstance(persistence["metadata"], dict)
+                                        or persistence["metadata"] is None
+                                        else {"run_id": run_id}
+                                    ),
+                                )
+                            )
+                            for event in events:
+                                yield event
+                            break
+                        if item is done:
+                            break
+                        if item.get("type") == "assistant.token.delta":
+                            token_emitted = True
+                        yield item
+            finally:
+                self._agent_run_duration_ms.record(
+                    (time.perf_counter() - started) * 1000.0,
+                    {"entrypoint": "run_stream"},
+                )
+                self._logger.info(
+                    "chat stream finished",
+                )
+                reset_log_context(context_tokens)
 
         return _stream()

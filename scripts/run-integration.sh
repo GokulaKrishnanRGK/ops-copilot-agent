@@ -91,9 +91,7 @@ export K8S_ALLOWED_NAMESPACES="${K8S_ALLOWED_NAMESPACES:-default}"
 export MCP_BASE_URL="${MCP_BASE_URL:-http://localhost:8080/mcp}"
 export OPENSEARCH_URL="${OPENSEARCH_URL:-https://localhost:9200}"
 export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-root}@localhost:5432/${POSTGRES_DB:-opscopilot}}"
-export LLM_DEBUG="${LLM_DEBUG:-0}"
-export AGENT_DEBUG="${AGENT_DEBUG:-0}"
-export TOOL_SERVER_DEBUG="${TOOL_SERVER_DEBUG:-0}"
+export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 export RUN_MCP_INTEGRATION="1"
 export MCP_NAMESPACE="${MCP_NAMESPACE:-default}"
 export MCP_LABEL_SELECTOR="${MCP_LABEL_SELECTOR:-}"
@@ -161,7 +159,7 @@ set +e
 cd packages/agent-runtime
 export KUBECONFIG_PATH="$host_kube"
 pytest_args=()
-if [ "${AGENT_DEBUG:-0}" = "1" ]; then
+if [ "${INTEGRATION_VERBOSE:-0}" = "1" ]; then
   pytest_args+=("--log-cli-level=INFO")
 fi
 TEST_LOG_ROOT="${TEST_LOG_ROOT}" TEST_RUN_DIR="${TEST_RUN_DIR}" MCP_NAMESPACE="$MCP_NAMESPACE" MCP_LABEL_SELECTOR="$MCP_LABEL_SELECTOR" \

@@ -125,13 +125,12 @@ class BedrockClient:
         output_json = None
         if request.response_format.type == "json_schema":
             output_json = _parse_json(text)
-        if os.getenv("LLM_DEBUG", "0") == "1":
-            logger.info(
-                "bedrock response model=%s text=%s json=%s",
-                request.model_id,
-                text,
-                output_json,
-            )
+        logger.debug(
+            "bedrock response model=%s text=%s json=%s",
+            request.model_id,
+            text,
+            output_json,
+        )
         return BedrockResult(
             output_text=text if output_json is None else None,
             output_json=output_json,
@@ -176,13 +175,12 @@ class BedrockClient:
         output_json = None
         if request.response_format.type == "json_schema":
             output_json = _parse_json(text)
-        if os.getenv("LLM_DEBUG", "0") == "1":
-            logger.info(
-                "bedrock stream response model=%s text=%s json=%s",
-                request.model_id,
-                text,
-                output_json,
-            )
+        logger.debug(
+            "bedrock stream response model=%s text=%s json=%s",
+            request.model_id,
+            text,
+            output_json,
+        )
         return BedrockResult(
             output_text=text if output_json is None else None,
             output_json=output_json,

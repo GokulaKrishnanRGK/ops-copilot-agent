@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down rag-ingest run-api run-tool-server run-local
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent opensearch-up opensearch-down rag-ingest run-api run-tool-server run-local
 
 build:
 	cd apps/web && npm run build
@@ -60,6 +60,9 @@ check: build lint format-check test
 install-web:
 	cd apps/web && npm install
 
+install-observability:
+	cd packages/observability && pip install -e .
+
 install-api:
 	cd apps/api && pip install -e .
 
@@ -75,7 +78,7 @@ install-rag:
 install-agent:
 	cd packages/agent-runtime && pip install -e .
 
-install: install-web install-api install-tool install-llm install-rag install-agent
+install: install-web install-observability install-api install-tool install-llm install-rag install-agent
 
 opensearch-up:
 	docker compose --env-file .env -f deploy/compose/opensearch.yml up -d

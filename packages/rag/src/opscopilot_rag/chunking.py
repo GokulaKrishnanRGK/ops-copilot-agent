@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 from .types import Chunk
+
+logger = logging.getLogger(__name__)
 
 
 def chunk_text(
@@ -10,6 +14,13 @@ def chunk_text(
     chunk_overlap: int,
     metadata: dict | None = None,
 ) -> list[Chunk]:
+    logger.debug(
+        "Chunking document document_id=%s text_length=%d chunk_size=%d chunk_overlap=%d",
+        document_id,
+        len(text),
+        chunk_size,
+        chunk_overlap,
+    )
     if chunk_size <= 0:
         raise ValueError("chunk_size must be positive")
     if chunk_overlap < 0:
@@ -42,4 +53,9 @@ def chunk_text(
         start = end - chunk_overlap
         index += 1
 
+    logger.info(
+        "Chunking completed document_id=%s chunks=%d",
+        document_id,
+        len(chunks),
+    )
     return chunks

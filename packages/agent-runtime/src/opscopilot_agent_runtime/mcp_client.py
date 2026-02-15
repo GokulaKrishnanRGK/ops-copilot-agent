@@ -45,14 +45,12 @@ class MCPClient:
     def list_tools(self) -> list[MCPTool]:
         logger = get_logger(__name__)
         tools = asyncio.run(self._list_tools())
-        if os.getenv("AGENT_DEBUG") == "1":
-            logger.info("mcp list_tools count=%s names=%s", len(tools), [t.name for t in tools])
+        logger.debug("mcp list_tools count=%s names=%s", len(tools), [t.name for t in tools])
         return tools
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict:
         logger = get_logger(__name__)
-        if os.getenv("AGENT_DEBUG") == "1":
-            logger.info("mcp call_tool name=%s args=%s", name, json.dumps(arguments, default=str))
+        logger.debug("mcp call_tool name=%s args=%s", name, json.dumps(arguments, default=str))
         return asyncio.run(self._call_tool(name, arguments))
 
     async def _list_tools(self) -> list[MCPTool]:
@@ -84,8 +82,7 @@ class MCPClient:
         async def handler(session: ClientSession):
             result = await session.call_tool(name, arguments=arguments)
             payload = self._result_to_dict(result)
-            if os.getenv("AGENT_DEBUG") == "1":
-                logger.info("mcp tool_result name=%s payload=%s", name, json.dumps(payload, default=str))
+            logger.debug("mcp tool_result name=%s payload=%s", name, json.dumps(payload, default=str))
             return payload
 
         return await self._with_session(handler)
@@ -101,8 +98,7 @@ class MCPClient:
                         await session.initialize()
                         return await handler(session)
             except Exception as exc:
-                if os.getenv("AGENT_DEBUG") == "1":
-                    logger.info("mcp session error base_url=%s attempt=%s error=%s", self._base_url, attempt, exc)
+                logger.debug("mcp session error base_url=%s attempt=%s error=%s", self._base_url, attempt, exc)
                 if attempt > self._max_retries:
                     raise exc
                 await asyncio.sleep(0.2 * attempt)

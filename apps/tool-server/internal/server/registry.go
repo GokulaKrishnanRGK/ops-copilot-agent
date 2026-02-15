@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ops-copilot/tool-server/internal/k8s"
+	"github.com/ops-copilot/tool-server/internal/logging"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -22,7 +23,7 @@ func listPodsHandler(ctx context.Context, client *kubernetes.Clientset, args map
 	namespace, _ := args["namespace"].(string)
 	pods, err := k8s.ListPods(ctx, client, namespace, labelSelector)
 	if err != nil {
-		debugLogf("tool list_pods error=%v", err)
+		logging.Error(ctx, "tool error", "tool_name", "k8s.list_pods", "error", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
 			Message:   "list pods failed: " + err.Error(),
@@ -51,7 +52,7 @@ func describePodHandler(ctx context.Context, client *kubernetes.Clientset, args 
 	}
 	pod, err := k8s.DescribePod(ctx, client, namespace, podName)
 	if err != nil {
-		debugLogf("tool describe_pod error=%v", err)
+		logging.Error(ctx, "tool error", "tool_name", "k8s.describe_pod", "error", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
 			Message:   "describe pod failed: " + err.Error(),
@@ -80,7 +81,7 @@ func podEventsHandler(ctx context.Context, client *kubernetes.Clientset, args ma
 	}
 	events, err := k8s.GetPodEvents(ctx, client, namespace, podName)
 	if err != nil {
-		debugLogf("tool get_pod_events error=%v", err)
+		logging.Error(ctx, "tool error", "tool_name", "k8s.get_pod_events", "error", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
 			Message:   "get pod events failed: " + err.Error(),
@@ -114,7 +115,7 @@ func podLogsHandler(ctx context.Context, client *kubernetes.Clientset, args map[
 	}
 	logs, err := k8s.GetPodLogs(ctx, client, namespace, podName, container, tailLines)
 	if err != nil {
-		debugLogf("tool get_pod_logs error=%v", err)
+		logging.Error(ctx, "tool error", "tool_name", "k8s.get_pod_logs", "error", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
 			Message:   "get pod logs failed: " + err.Error(),
@@ -143,7 +144,7 @@ func describeDeploymentHandler(ctx context.Context, client *kubernetes.Clientset
 	}
 	deployment, err := k8s.DescribeDeployment(ctx, client, namespace, deploymentName)
 	if err != nil {
-		debugLogf("tool describe_deployment error=%v", err)
+		logging.Error(ctx, "tool error", "tool_name", "k8s.describe_deployment", "error", err)
 		errResp := toolError{
 			ErrorType: "execution_error",
 			Message:   "describe deployment failed: " + err.Error(),

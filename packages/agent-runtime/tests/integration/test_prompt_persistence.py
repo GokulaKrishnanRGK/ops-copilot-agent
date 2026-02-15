@@ -47,8 +47,7 @@ def test_prompt_run_persists_steps():
         pytest.skip("LLM_COST_TABLE_PATH not set")
     if not os.getenv("AWS_REGION"):
         pytest.skip("AWS_REGION not set")
-    if os.getenv("LLM_DEBUG") == "1":
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 
     _ensure_schema()
     run_id = str(uuid.uuid4())
