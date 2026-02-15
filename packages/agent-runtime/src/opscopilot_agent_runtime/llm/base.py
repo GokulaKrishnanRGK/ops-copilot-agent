@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from typing import Callable
 
+from opentelemetry import trace
 from opscopilot_llm_gateway.accounting import CostLedger, CostRecord
 from opscopilot_llm_gateway.budgets import BudgetEnforcer
 from opscopilot_llm_gateway.costs import estimate_cost_usd
 from opscopilot_llm_gateway.gateway import run_gateway_call
 from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
-from opscopilot_llm_gateway.types import LlmRequest
+from opscopilot_llm_gateway.types import LlmRequest, LlmTags
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.logging import get_logger
@@ -29,6 +31,7 @@ class LlmNodeBase:
         self._cost_table = cost_table
         self._budget = budget
         self._ledger = ledger
+        self._tracer = trace.get_tracer("opscopilot_agent_runtime.llm")
 
     def _call(
         self,
@@ -37,50 +40,69 @@ class LlmNodeBase:
         recorder: AgentRunRecorder | None,
         on_delta: Callable[[str], None] | None = None,
     ):
+        effective_request = request
+        if recorder:
+            effective_request = replace(
+                request,
+                tags=LlmTags(
+                    session_id=recorder.session_id,
+                    agent_run_id=recorder.run_id,
+                    agent_node=agent_node,
+                ),
+            )
         logger = get_logger(__name__)
         if os.getenv("AGENT_DEBUG") == "1" or os.getenv("LLM_DEBUG") == "1":
             logger.info(
                 "llm request node=%s model=%s messages=%s",
                 agent_node,
-                request.model_id,
-                json.dumps([m.content for m in request.messages], default=str),
+                effective_request.model_id,
+                json.dumps([m.content for m in effective_request.messages], default=str),
             )
-        if on_delta is None:
-            response = run_gateway_call(
-                provider=self._provider,
-                request=request,
-                cost_table=self._cost_table,
-                budget=self._budget,
-                ledger=self._ledger,
-            )
-        else:
-            response = self._provider.invoke_stream(request, on_delta)
-            estimated = estimate_cost_usd(
+        with self._tracer.start_as_current_span("llm.node.call") as span:
+            span.set_attribute("model_id", effective_request.model_id)
+            span.set_attribute("agent_node", agent_node)
+            span.set_attribute("session_id", effective_request.tags.session_id)
+            span.set_attribute("agent_run_id", effective_request.tags.agent_run_id)
+            if on_delta is None:
+                response = run_gateway_call(
+                    provider=self._provider,
+                    request=effective_request,
+                    cost_table=self._cost_table,
+                    budget=self._budget,
+                    ledger=self._ledger,
+                )
+            else:
+                response = self._provider.invoke_stream(effective_request, on_delta)
+                estimated = estimate_cost_usd(
+                    self._cost_table,
+                    effective_request.model_id,
+                    response.tokens_input,
+                    response.tokens_output,
+                )
+                if not self._budget.can_spend(estimated):
+                    raise RuntimeError("budget_exceeded")
+                self._budget.record_spend(estimated)
+                self._ledger.record(
+                    CostRecord(
+                        session_id=effective_request.tags.session_id,
+                        agent_run_id=effective_request.tags.agent_run_id,
+                        agent_node=effective_request.tags.agent_node,
+                        model_id=effective_request.model_id,
+                        tokens_input=response.tokens_input,
+                        tokens_output=response.tokens_output,
+                        cost_usd=estimated,
+                    )
+                )
+            cost_usd = estimate_cost_usd(
                 self._cost_table,
-                request.model_id,
+                self._model_id,
                 response.tokens_input,
                 response.tokens_output,
             )
-            if not self._budget.can_spend(estimated):
-                raise RuntimeError("budget_exceeded")
-            self._budget.record_spend(estimated)
-            self._ledger.record(
-                CostRecord(
-                    session_id=request.tags.session_id,
-                    agent_run_id=request.tags.agent_run_id,
-                    agent_node=request.tags.agent_node,
-                    model_id=request.model_id,
-                    tokens_input=response.tokens_input,
-                    tokens_output=response.tokens_output,
-                    cost_usd=estimated,
-                )
-            )
-        cost_usd = estimate_cost_usd(
-            self._cost_table,
-            self._model_id,
-            response.tokens_input,
-            response.tokens_output,
-        )
+            span.set_attribute("tokens_input", response.tokens_input)
+            span.set_attribute("tokens_output", response.tokens_output)
+            span.set_attribute("cost_usd", float(cost_usd))
+            span.set_attribute("latency_ms", response.latency_ms)
         if os.getenv("AGENT_DEBUG") == "1" or os.getenv("LLM_DEBUG") == "1":
             logger.info(
                 "llm response node=%s tokens_in=%s tokens_out=%s cost_usd=%s error=%s output=%s",

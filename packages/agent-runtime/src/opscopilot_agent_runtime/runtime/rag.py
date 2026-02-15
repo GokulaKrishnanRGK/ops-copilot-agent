@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from opentelemetry import trace
 from opscopilot_rag.citations import build_citations
 from opscopilot_rag.embeddings import OpenAIEmbeddingAdapter
 from opscopilot_rag.opensearch_client import OpenSearchClient
@@ -11,6 +13,9 @@ from opscopilot_rag.types import EmbeddingRequest, OpenSearchConfig, \
   RetrievalResult, Citation
 
 from opscopilot_agent_runtime.runtime.logging import get_logger
+
+if TYPE_CHECKING:
+  from opscopilot_agent_runtime.persistence import AgentRunRecorder
 
 
 @dataclass(frozen=True)
@@ -39,25 +44,34 @@ class RagRetriever:
   def from_env() -> "RagRetriever":
     return RagRetriever(OpenSearchClient().config, _read_top_k())
 
-  def retrieve(self, query: str) -> RagContext:
+  def retrieve(self, query: str, recorder: "AgentRunRecorder | None" = None) -> RagContext:
     logger = get_logger(__name__)
-    logger.info(
-        "RAG RETRIEVE query %s index=%s top_k=%d", query, self._config.index,
-        self._top_k
-    )
-    embeddings = self._adapter.embed(EmbeddingRequest(texts=[query]))
-    vector = embeddings.vectors[0]
-    results = retrieve_knn(self._client, self._config.index, vector,
-                           self._top_k)
-    citations = build_citations(results)
-    context_lines = []
-    for result in results:
-      context_lines.append(f"[{result.source}] {result.text}")
-    if os.getenv("AGENT_DEBUG") == "1":
+    tracer = trace.get_tracer("opscopilot_agent_runtime.rag")
+    with tracer.start_as_current_span("rag.retrieve") as span:
+      span.set_attribute("index", self._config.index)
+      span.set_attribute("top_k", self._top_k)
+      span.set_attribute("query_length", len(query))
+      if recorder:
+        span.set_attribute("session_id", recorder.session_id)
+        span.set_attribute("agent_run_id", recorder.run_id)
       logger.info(
-          "rag retrieved %d chunks index=%s top_k=%d",
-          len(results),
-          self._config.index,
-          self._top_k,
+          "RAG RETRIEVE query %s index=%s top_k=%d", query, self._config.index,
+          self._top_k
       )
-    return RagContext(text="\n".join(context_lines), results=results, citations=citations)
+      embeddings = self._adapter.embed(EmbeddingRequest(texts=[query]))
+      vector = embeddings.vectors[0]
+      results = retrieve_knn(self._client, self._config.index, vector,
+                             self._top_k)
+      citations = build_citations(results)
+      context_lines = []
+      for result in results:
+        context_lines.append(f"[{result.source}] {result.text}")
+      span.set_attribute("retrieved_chunks", len(results))
+      if os.getenv("AGENT_DEBUG") == "1":
+        logger.info(
+            "rag retrieved %d chunks index=%s top_k=%d",
+            len(results),
+            self._config.index,
+            self._top_k,
+        )
+      return RagContext(text="\n".join(context_lines), results=results, citations=citations)
