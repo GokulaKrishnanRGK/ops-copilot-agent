@@ -318,6 +318,24 @@ export function App() {
   }, [activeSessionId]);
 
   useEffect(() => {
+    if (!activeSessionId || loadingOlderMessages || !hasMoreMessages) {
+      return;
+    }
+    if (persistedMessages.length === 0) {
+      return;
+    }
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+    const isScrollable = container.scrollHeight > container.clientHeight + 4;
+    if (isScrollable) {
+      return;
+    }
+    void loadMessagePage({ reset: false, preserveScroll: false });
+  }, [activeSessionId, hasMoreMessages, loadingOlderMessages, persistedMessages.length]);
+
+  useEffect(() => {
     pendingRunLogsRef.current = pendingRunLogs;
   }, [pendingRunLogs]);
 
