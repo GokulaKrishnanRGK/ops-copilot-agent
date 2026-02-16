@@ -55,11 +55,13 @@ class RunService:
         run_repo: repositories.AgentRunRepository,
         llm_call_repo: repositories.LlmCallRepository,
         budget_event_repo: repositories.BudgetEventRepository,
+        message_repo: repositories.MessageRepository | None = None,
     ) -> None:
         self._session_repo = session_repo
         self._run_repo = run_repo
         self._llm_call_repo = llm_call_repo
         self._budget_event_repo = budget_event_repo
+        self._message_repo = message_repo
 
     def list_by_session(self, session_id: str) -> list[models.AgentRun]:
         session = self._session_repo.get(session_id)
@@ -109,7 +111,23 @@ class RunService:
             delta_usd=total_budget_delta_usd,
             event_count=total_budget_events,
         )
-        return SessionMetrics(usage=usage, budget=budget, run_count=len(runs))
+        run_count = len(runs)
+        if run_count == 0:
+            run_count = self._fallback_run_count_from_messages(session_id)
+        return SessionMetrics(usage=usage, budget=budget, run_count=run_count)
+
+    def _fallback_run_count_from_messages(self, session_id: str) -> int:
+        if self._message_repo is None:
+            return 0
+        run_ids: set[str] = set()
+        for message in self._message_repo.list_by_session(session_id):
+            metadata = message.metadata_json if isinstance(message.metadata_json, dict) else None
+            if metadata is None:
+                continue
+            run_id = metadata.get("run_id")
+            if isinstance(run_id, str) and run_id:
+                run_ids.add(run_id)
+        return len(run_ids)
 
     def _build_run_metrics(
         self,

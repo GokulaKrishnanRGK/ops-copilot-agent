@@ -12,7 +12,7 @@ from opscopilot_api.schemas.runs import (
     UsageMetricsResponse,
 )
 from opscopilot_api.services.run_service import RunService
-from opscopilot_db.repositories import AgentRunRepo, BudgetEventRepo, LlmCallRepo, SessionRepo
+from opscopilot_db.repositories import AgentRunRepo, BudgetEventRepo, LlmCallRepo, MessageRepo, SessionRepo
 
 router = APIRouter()
 
@@ -23,6 +23,7 @@ def get_run_service(db: Session = Depends(get_db)) -> RunService:
         run_repo=AgentRunRepo(db=db),
         llm_call_repo=LlmCallRepo(db=db),
         budget_event_repo=BudgetEventRepo(db=db),
+        message_repo=MessageRepo(db=db),
     )
 
 
