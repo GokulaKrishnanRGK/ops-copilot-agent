@@ -3,10 +3,16 @@ from __future__ import annotations
 import logging
 import os
 
-from opscopilot_observability import clear_log_context, configure_json_logging, set_log_context
+from opscopilot_observability import (
+    clear_log_context,
+    configure_json_logging,
+    configure_telemetry,
+    set_log_context,
+)
 
 
 def _configure_logging() -> None:
+    configure_telemetry(default_service_name="ops-copilot-agent-runtime")
     configure_json_logging(
         service_name="agent-runtime",
         level=os.getenv("LOG_LEVEL", "INFO"),

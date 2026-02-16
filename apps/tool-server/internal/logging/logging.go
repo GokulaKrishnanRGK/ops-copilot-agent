@@ -138,7 +138,18 @@ func Configure() {
 	}
 
 	writer := io.MultiWriter(os.Stdout, rotatingFile)
-	handler := slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: resolveLevel()})
+	handler := slog.NewJSONHandler(
+		writer,
+		&slog.HandlerOptions{
+			Level: resolveLevel(),
+			ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.MessageKey {
+					a.Key = "message"
+				}
+				return a
+			},
+		},
+	)
 	logger = slog.New(handler).With("service", "tool-server", "component", "tool-server")
 	slog.SetDefault(logger)
 }

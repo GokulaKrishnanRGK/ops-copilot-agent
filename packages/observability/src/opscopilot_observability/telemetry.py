@@ -11,7 +11,6 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import NoOpTracerProvider
 
 _configured = False
 
@@ -37,7 +36,7 @@ def configure_telemetry(default_service_name: str = "ops-copilot") -> None:
     if _configured:
         return
 
-    if not isinstance(trace.get_tracer_provider(), NoOpTracerProvider):
+    if isinstance(trace.get_tracer_provider(), TracerProvider):
         _configured = True
         return
 

@@ -1,0 +1,81 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "title": "Open Tempo Explore",
+      "type": "link",
+      "url": "/explore?left=%7B%22datasource%22:%22tempo%22,%22queries%22:[%7B%22query%22:%22%22%7D]%7D"
+    },
+    {
+      "title": "Open Loki Explore",
+      "type": "link",
+      "url": "/explore?left=%7B%22datasource%22:%22loki%22,%22queries%22:[%7B%22expr%22:%22%7Bjob%3D%5C%22opscopilot%5C%22%7D%22%7D]%7D"
+    }
+  ],
+  "panels": [
+    {
+      "type": "text",
+      "title": "Trace Validation",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+      "options": {
+        "mode": "markdown",
+        "content": "Use **Open Tempo Explore** to query traces by service.name:\n- `ops-copilot-api`\n- `ops-copilot-agent-runtime`\n- `ops-copilot-tool-server`\n\nThen pivot to logs via trace_id in Loki."
+      }
+    },
+    {
+      "type": "logs",
+      "title": "All OpsCopilot Logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 6},
+      "targets": [
+        {
+          "expr": "{job=\"opscopilot\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Tool Server MCP Calls",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "{job=\"opscopilot\", service=\"tool-server\"} |= \"mcp tool_call\"",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "API Request Logs",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "gridPos": {"h": 10, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {
+          "expr": "{job=\"opscopilot\", service=\"api\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["opscopilot", "logs", "traces"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "OpsCopilot Logs and Traces",
+  "uid": "opscopilot-logs-traces",
+  "version": 1,
+  "weekStart": ""
+}

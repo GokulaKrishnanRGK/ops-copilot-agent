@@ -33,11 +33,19 @@ def create_app() -> FastAPI:
                 span.set_attribute("http.status_code", response.status_code)
                 span.set_attribute("http.duration_ms", duration_ms)
                 logging.getLogger("opscopilot_api.request").info(
-                    "method=%s path=%s status=%s duration_ms=%d",
+                    "http request completed method=%s path=%s status=%s duration_ms=%d",
                     request.method,
                     request.url.path,
                     response.status_code,
                     duration_ms,
+                    extra={
+                        "fields": {
+                            "http_method": request.method,
+                            "http_path": request.url.path,
+                            "http_status_code": response.status_code,
+                            "http_duration_ms": duration_ms,
+                        }
+                    },
                 )
                 return response
             except Exception as exc:
@@ -46,10 +54,20 @@ def create_app() -> FastAPI:
                 span.set_attribute("http.duration_ms", duration_ms)
                 span.record_exception(exc)
                 logging.getLogger("opscopilot_api.request").exception(
-                    "method=%s path=%s status=500 duration_ms=%d",
+                    "http request failed method=%s path=%s status=500 duration_ms=%d error_type=%s",
                     request.method,
                     request.url.path,
                     duration_ms,
+                    type(exc).__name__,
+                    extra={
+                        "fields": {
+                            "http_method": request.method,
+                            "http_path": request.url.path,
+                            "http_status_code": 500,
+                            "http_duration_ms": duration_ms,
+                            "error_type": type(exc).__name__,
+                        }
+                    },
                 )
                 raise
             finally:
