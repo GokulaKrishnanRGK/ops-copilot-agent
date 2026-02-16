@@ -5,6 +5,8 @@ from opscopilot_agent_runtime.state import AgentState
 
 class FakeRecorder:
     def __init__(self):
+        self.session_id = "test-session"
+        self.run_id = "test-run"
         self.started = False
         self.finished = None
         self.config = None

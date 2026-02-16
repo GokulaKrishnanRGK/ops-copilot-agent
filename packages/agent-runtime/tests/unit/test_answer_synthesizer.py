@@ -7,6 +7,8 @@ from opscopilot_llm_gateway.providers.bedrock import BedrockProvider, BedrockRes
 
 class FakeRecorder:
     def __init__(self):
+        self.session_id = "test-session"
+        self.run_id = "test-run"
         self.llm_calls = 0
         self.budget_events = 0
 

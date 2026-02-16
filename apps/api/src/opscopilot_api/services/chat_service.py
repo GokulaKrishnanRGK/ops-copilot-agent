@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from contextvars import copy_context
+from collections.abc import Iterable
 from typing import Callable
 from queue import Empty, Queue
 import threading
 import time
 import logging
 from uuid import uuid4
-from opentelemetry import metrics, trace
+from opentelemetry import context as otel_context, metrics, trace
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.state import AgentState
@@ -153,6 +153,21 @@ class ChatService:
             return []
         return [runtime_event(session_id, run_id, "tool.logs.available", {"items": items})]
 
+    @staticmethod
+    def _runtime_states(runtime: object, initial_state: AgentState) -> Iterable[AgentState]:
+        run_stream = getattr(runtime, "run_stream", None)
+        if callable(run_stream):
+            return run_stream(initial_state)
+        run = getattr(runtime, "run", None)
+        if callable(run):
+            result = run(initial_state)
+            if isinstance(result, AgentState):
+                return [result]
+            answer = getattr(result, "answer", None)
+            error = getattr(result, "error", None)
+            return [initial_state.merge(answer=answer, error=error)]
+        raise AttributeError("runtime does not implement run_stream or run")
+
     def run(self, session_id: str, prompt: str) -> ChatResult:
         session = self._session_repo.get(session_id)
         if session is None:
@@ -276,6 +291,7 @@ class ChatService:
                     tracker = StreamLifecycleTracker()
                     queue: Queue = Queue()
                     done = object()
+                    worker_parent_context = otel_context.get_current()
 
                     def on_llm_delta(node: str, text: str) -> None:
                         events = decider.llm_delta_events(
@@ -292,29 +308,31 @@ class ChatService:
                         try:
                             answer_emitted = False
                             last_state = AgentState(prompt=prompt, prompt_history=prompt_history)
-                            for state in runtime.run_stream(
+                            for state in self._runtime_states(
+                                runtime,
                                 AgentState(
                                     prompt=prompt,
                                     prompt_history=prompt_history,
                                     llm_stream_callback=on_llm_delta,
-                                )
+                                ),
                             ):
                                 last_state = state
-                                if state.event is not None:
-                                    if state.event.event_type == "tool_executor.completed":
+                                state_event = getattr(state, "event", None)
+                                if state_event is not None:
+                                    if state_event.event_type == "tool_executor.completed":
                                         for log_event in self._tool_log_events(
                                             session_id=session_id,
                                             run_id=run_id,
-                                            tool_results=state.tool_results,
+                                            tool_results=getattr(state, "tool_results", None),
                                         ):
                                             queue.put(log_event)
                                     events = decider.runtime_events(
                                         session_id=session_id,
                                         run_id=run_id,
-                                        event_type=state.event.event_type,
-                                        payload=state.event.payload or {},
+                                        event_type=state_event.event_type,
+                                        payload=state_event.payload or {},
                                         tracker=tracker,
-                                        answer_message=state.answer,
+                                        answer_message=getattr(state, "answer", None),
                                     )
                                     for event in events:
                                         queue.put(event)
@@ -340,7 +358,6 @@ class ChatService:
                                 }
                             )
                         except Exception as exc:
-                            span.record_exception(exc)
                             self._logger.exception("chat stream runtime failed")
                             message = str(exc) or "agent runtime failed"
                             queue.put(
@@ -353,8 +370,16 @@ class ChatService:
                             )
                             queue.put(done)
 
-                    worker_context = copy_context()
-                    thread = threading.Thread(target=lambda: worker_context.run(worker), daemon=True)
+                    def worker_entrypoint():
+                        token = otel_context.attach(worker_parent_context)
+                        set_log_context(session_id=session_id, agent_run_id=run_id)
+                        try:
+                            worker()
+                        finally:
+                            clear_log_context()
+                            otel_context.detach(token)
+
+                    thread = threading.Thread(target=worker_entrypoint, daemon=True)
                     thread.start()
                     token_emitted = False
                     while True:
