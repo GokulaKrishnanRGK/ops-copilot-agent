@@ -60,6 +60,9 @@ class JsonLogFormatter(logging.Formatter):
             "span_id": span_id,
             "thread_id": record.thread,
         }
+        fields = getattr(record, "fields", None)
+        if isinstance(fields, dict):
+            payload.update(fields)
         return json.dumps(payload, default=str)
 
 

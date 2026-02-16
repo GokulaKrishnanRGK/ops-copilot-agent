@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from contextvars import copy_context
 from typing import Callable
 from queue import Empty, Queue
 import threading
@@ -352,7 +353,8 @@ class ChatService:
                             )
                             queue.put(done)
 
-                    thread = threading.Thread(target=worker, daemon=True)
+                    worker_context = copy_context()
+                    thread = threading.Thread(target=lambda: worker_context.run(worker), daemon=True)
                     thread.start()
                     token_emitted = False
                     while True:

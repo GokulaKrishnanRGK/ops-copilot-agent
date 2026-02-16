@@ -142,14 +142,29 @@ The system emits:
 - Metrics for latency, errors, and cost
 - Structured logs correlated by trace and run identifiers
 
-Local deployments include an OpenTelemetry collector for inspection.
+Local deployments include a full observability stack for inspection in Grafana.
 
 Run collector locally:
 
 - `make observability-up`
+- Grafana: `http://localhost:3000` (default: `admin` / `admin`)
+- Loki API: `http://localhost:3100`
+- Tempo API: `http://localhost:3200`
+- Prometheus UI: `http://localhost:9090`
 - Collector health: `http://localhost:13133/`
 - OTLP HTTP endpoint: `http://localhost:4318`
-- Prometheus metrics endpoint: `http://localhost:8889/metrics`
+- Collector Prometheus scrape endpoint: `http://localhost:8889/metrics`
+
+The Grafana data sources are provisioned automatically:
+
+- `Prometheus` for metrics
+- `Loki` for logs
+- `Tempo` for traces
+- Dashboards are provisioned automatically in folder `OpsCopilot`:
+  - `OpsCopilot Overview`
+  - `OpsCopilot Logs and Traces`
+
+Logs are ingested via Grafana Alloy from `${LOGS_HOST_PATH}` (for example API and tool-server JSON log files).
 
 Runtime export configuration:
 
