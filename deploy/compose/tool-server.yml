@@ -1,5 +1,6 @@
 services:
   tool-server:
+    image: "${TOOL_SERVER_IMAGE_REPOSITORY:-ops-copilot/tool-server}:${IMAGE_TAG:-dev}"
     build:
       context: ../../apps/tool-server
       dockerfile: Dockerfile
@@ -8,7 +9,7 @@ services:
     environment:
       TOOL_SERVER_ADDR: ":8080"
       TOOL_SERVER_LOG_FILE: "${TOOL_SERVER_LOG_FILE}"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://host.docker.internal:4318}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT_COMPOSE:-http://otel-collector:4318}"
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME:-ops-copilot-tool-server}"
       TZ: "${TZ:-America/New_York}"
       KUBECONFIG_PATH: "/kube/config"

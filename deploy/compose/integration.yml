@@ -16,6 +16,7 @@ services:
       retries: 12
 
   tool-server:
+    image: "${TOOL_SERVER_IMAGE_REPOSITORY:-ops-copilot/tool-server}:${IMAGE_TAG:-dev}"
     build:
       context: ../../apps/tool-server
       dockerfile: Dockerfile
@@ -25,6 +26,8 @@ services:
       TOOL_SERVER_ADDR: ":8080"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       TOOL_SERVER_LOG_FILE: "${TOOL_SERVER_LOG_FILE}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT_COMPOSE:-http://otel-collector:4318}"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME_TOOL_SERVER:-ops-copilot-tool-server}"
       TZ: "${TZ:-America/Los_Angeles}"
       KUBECONFIG_PATH: "/kube/config"
       K8S_ALLOWED_NAMESPACES: "${K8S_ALLOWED_NAMESPACES}"
