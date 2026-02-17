@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down rag-ingest run-api run-tool-server run-local run-local-down kind-up kind-down kind-kubeconfig kind-seed docker-build-api docker-build-web docker-build-tool-server docker-build-images
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down rag-ingest run-api run-tool-server run-local run-local-down smoke-local kind-up kind-down kind-kubeconfig kind-seed docker-build-api docker-build-web docker-build-tool-server docker-build-images
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -140,23 +140,10 @@ docker-build-tool-server:
 docker-build-images: docker-build-api docker-build-web docker-build-tool-server
 
 run-local:
-	@set -e; \
-	if [ "$(KIND_BOOTSTRAP)" = "1" ]; then \
-		KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" bash scripts/create-kind.sh; \
-		if [ "$(KIND_SEED_WORKLOADS)" = "1" ]; then KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" bash scripts/seed-kind-workloads.sh; fi; \
-		KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" KUBECONFIG_HANDOFF_PATH="$(KUBECONFIG_HANDOFF_PATH)" bash scripts/render-kind-kubeconfig.sh >/dev/null; \
-		export KUBECONFIG_PATH="$(KUBECONFIG_HANDOFF_PATH)"; \
-	fi; \
-	files="-f deploy/compose/app.yml -f deploy/compose/tool-server.yml"; \
-	if [ "$(LOCAL_POSTGRES)" = "1" ]; then files="$$files -f deploy/compose/postgres.yml"; fi; \
-	if [ "$(LOCAL_OPENSEARCH)" = "1" ]; then files="$$files -f deploy/compose/opensearch.yml"; fi; \
-	if [ "$(LOCAL_OTEL)" = "1" ]; then files="$$files -f deploy/compose/observability.yml"; fi; \
-	eval "docker compose --env-file .env $$files up -d"
+	LOCAL_POSTGRES="$(LOCAL_POSTGRES)" LOCAL_OPENSEARCH="$(LOCAL_OPENSEARCH)" LOCAL_OTEL="$(LOCAL_OTEL)" KIND_BOOTSTRAP="$(KIND_BOOTSTRAP)" KIND_SEED_WORKLOADS="$(KIND_SEED_WORKLOADS)" KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" KUBECONFIG_HANDOFF_PATH="$(KUBECONFIG_HANDOFF_PATH)" bash scripts/run-local.sh
 
 run-local-down:
-	@set -e; \
-	files="-f deploy/compose/app.yml -f deploy/compose/tool-server.yml"; \
-	if [ "$(LOCAL_POSTGRES)" = "1" ]; then files="$$files -f deploy/compose/postgres.yml"; fi; \
-	if [ "$(LOCAL_OPENSEARCH)" = "1" ]; then files="$$files -f deploy/compose/opensearch.yml"; fi; \
-	if [ "$(LOCAL_OTEL)" = "1" ]; then files="$$files -f deploy/compose/observability.yml"; fi; \
-	eval "docker compose --env-file .env $$files down"
+	LOCAL_POSTGRES="$(LOCAL_POSTGRES)" LOCAL_OPENSEARCH="$(LOCAL_OPENSEARCH)" LOCAL_OTEL="$(LOCAL_OTEL)" bash scripts/run-local-down.sh
+
+smoke-local:
+	SMOKE_API_BASE_URL="$${SMOKE_API_BASE_URL:-http://localhost:8000/api}" SMOKE_PROMPT="$${SMOKE_PROMPT:-List the Kubernetes pods in namespace default and report their status.}" bash scripts/smoke-local.sh
