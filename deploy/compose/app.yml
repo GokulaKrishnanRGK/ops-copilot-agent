@@ -1,0 +1,78 @@
+services:
+  db-migrate:
+    image: "${API_IMAGE_REPOSITORY:-ops-copilot/api}:${IMAGE_TAG:-dev}"
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: "${DATABASE_URL_COMPOSE:-postgresql+psycopg://postgres:root@postgres:5432/opscopilot}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    command:
+      - sh
+      - -c
+      - |
+        attempts=30
+        while [ "$$attempts" -gt 0 ]; do
+          cd /app/migrations && alembic -c alembic.ini upgrade head && exit 0
+          attempts=$$((attempts - 1))
+          sleep 2
+        done
+        echo "db migration failed after retries" >&2
+        exit 1
+
+  api:
+    image: "${API_IMAGE_REPOSITORY:-ops-copilot/api}:${IMAGE_TAG:-dev}"
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "${DATABASE_URL_COMPOSE:-postgresql+psycopg://postgres:root@postgres:5432/opscopilot}"
+      MCP_BASE_URL: "${MCP_BASE_URL_COMPOSE:-http://tool-server:8080/mcp}"
+      OPENSEARCH_URL: "${OPENSEARCH_URL_COMPOSE:-https://opensearch:9200}"
+      OPENSEARCH_VERIFY_CERTS: "${OPENSEARCH_VERIFY_CERTS:-false}"
+      OPENSEARCH_USERNAME: "${OPENSEARCH_USERNAME}"
+      OPENSEARCH_PASSWORD: "${OPENSEARCH_PASSWORD}"
+      OPENSEARCH_INDEX: "${OPENSEARCH_INDEX}"
+      LLM_MODEL_ID: "${LLM_MODEL_ID}"
+      LLM_COST_TABLE_PATH: "${LLM_COST_TABLE_PATH_COMPOSE:-/app/config/costs.json}"
+      LLM_EMBEDDING_PROVIDER: "${LLM_EMBEDDING_PROVIDER}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OPENAI_EMBEDDING_MODEL: "${OPENAI_EMBEDDING_MODEL}"
+      BEDROCK_EMBEDDING_MODEL_ID: "${BEDROCK_EMBEDDING_MODEL_ID}"
+      BEDROCK_REGION: "${BEDROCK_REGION}"
+      AWS_REGION: "${AWS_REGION}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN:-}"
+      K8S_ALLOWED_NAMESPACES: "${K8S_ALLOWED_NAMESPACES}"
+      API_LOG_FILE: "${API_LOG_FILE}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      TZ: "${TZ:-America/New_York}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT_COMPOSE:-http://otel-collector:4318}"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}"
+      OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME_API:-ops-copilot-api}"
+    volumes:
+      - "${LOGS_HOST_PATH}:${LOGS_HOST_PATH}"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      tool-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  web:
+    image: "${WEB_IMAGE_REPOSITORY:-ops-copilot/web}:${IMAGE_TAG:-dev}"
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
