@@ -3,6 +3,8 @@ module "network" {
 
   name_prefix = local.name_prefix
   tags        = local.common_tags
+  vpc_cidr    = var.network_vpc_cidr
+  az_count    = var.network_az_count
 }
 
 module "rds" {
