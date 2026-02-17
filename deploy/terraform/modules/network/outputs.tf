@@ -1,19 +1,19 @@
 output "vpc_id" {
   description = "VPC identifier."
-  value       = local.vpc_id
+  value       = aws_vpc.this.id
 }
 
 output "private_subnet_ids" {
   description = "Private subnet identifiers."
-  value       = []
+  value       = [for az in sort(keys(aws_subnet.private)) : aws_subnet.private[az].id]
 }
 
 output "public_subnet_ids" {
   description = "Public subnet identifiers."
-  value       = []
+  value       = [for az in sort(keys(aws_subnet.public)) : aws_subnet.public[az].id]
 }
 
 output "app_security_group_id" {
   description = "Application security group identifier."
-  value       = null
+  value       = aws_security_group.app.id
 }
