@@ -14,6 +14,11 @@ output "rds" {
     endpoint             = module.rds.endpoint
     port                 = module.rds.port
     database_secret_name = module.rds.database_secret_name
+    database_secret_arn  = module.rds.database_secret_arn
+    identifier           = module.rds.identifier
+    database_name        = module.rds.database_name
+    username             = module.rds.username
+    security_group_id    = module.rds.security_group_id
   }
 }
 
