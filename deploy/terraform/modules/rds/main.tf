@@ -25,6 +25,22 @@ resource "aws_security_group" "db" {
     security_groups = [var.security_group_id]
   }
 
+  egress {
+    description = "Allow DNS UDP inside VPC."
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "Allow DNS TCP inside VPC."
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-db-sg"
   })

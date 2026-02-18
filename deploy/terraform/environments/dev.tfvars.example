@@ -7,6 +7,11 @@ opensearch_index_name = "opscopilot-docs"
 artifacts_create_python_package_registry = false
 artifacts_ecr_scan_on_push = false
 
+# placeholders only. Route53 + ACM provisioning is handled later
+ingress_domain_name    = ""
+route53_hosted_zone_id = ""
+acm_certificate_arn    = ""
+
 # Optional overrides:
 # tags = {
 #   owner = "platform-team"

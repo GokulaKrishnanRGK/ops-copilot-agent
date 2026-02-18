@@ -73,6 +73,12 @@ output "helm_values" {
     artifacts = {
       pythonPackageRegistryUrl = module.artifacts.package_registry_url
     }
+    ingress = {
+      domainName = var.ingress_domain_name != "" ? var.ingress_domain_name : null
+      tls = {
+        certificateArn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+      }
+    }
   }
 }
 
@@ -97,4 +103,14 @@ output "helm_secret_refs" {
 output "terraform_output_contract_version" {
   description = "Version marker for Terraform->Helm normalized output contract."
   value       = "v1"
+}
+
+output "dns_contract" {
+  description = "Domain/DNS/TLS contract placeholders for M12 Route53 + ACM provisioning."
+  value = {
+    ingress_domain_name    = var.ingress_domain_name != "" ? var.ingress_domain_name : null
+    route53_hosted_zone_id = var.route53_hosted_zone_id != "" ? var.route53_hosted_zone_id : null
+    acm_certificate_arn    = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+    provisioning_milestone = "M12"
+  }
 }

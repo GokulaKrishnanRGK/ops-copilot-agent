@@ -61,3 +61,21 @@ variable "artifacts_ecr_scan_on_push" {
   type        = bool
   default     = false
 }
+
+variable "ingress_domain_name" {
+  description = "Primary DNS name for web ingress (contract placeholder for M12)."
+  type        = string
+  default     = ""
+}
+
+variable "route53_hosted_zone_id" {
+  description = "Route53 hosted zone ID for ingress record management (contract placeholder for M12)."
+  type        = string
+  default     = ""
+}
+
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN for ingress TLS termination (contract placeholder for M12)."
+  type        = string
+  default     = ""
+}
