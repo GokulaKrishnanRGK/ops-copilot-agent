@@ -44,7 +44,9 @@ resource "aws_codeartifact_repository" "python" {
   domain     = aws_codeartifact_domain.python[0].domain
   repository = var.codeartifact_repository_name
 
-  external_connections = ["public:pypi"]
+  external_connections {
+    external_connection_name = "public:pypi"
+  }
 
   tags = merge(var.tags, {
     Name = var.codeartifact_repository_name

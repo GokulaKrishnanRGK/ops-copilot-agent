@@ -49,7 +49,7 @@ variable "allocated_storage" {
 variable "max_allocated_storage" {
   description = "Maximum autoscaled storage in GiB."
   type        = number
-  default     = 100
+  default     = 20
 }
 
 variable "db_name" {
@@ -67,7 +67,7 @@ variable "master_username" {
 variable "backup_retention_period" {
   description = "Backup retention period in days."
   type        = number
-  default     = 7
+  default     = 1
 }
 
 variable "deletion_protection" {

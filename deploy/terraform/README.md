@@ -27,3 +27,13 @@ This directory defines the Infrastructure-as-Code baseline for cloud deployment.
 ## Current State
 
 Module interfaces are defined and wired. Resource bodies are intentionally minimal and should be implemented incrementally.
+
+## Cost-Minimized Defaults
+
+The current defaults are tuned for low-cost test usage:
+
+- CodeArtifact package registry creation is disabled by default (`artifacts_create_python_package_registry = false`).
+- ECR image scan on push is disabled by default (`artifacts_ecr_scan_on_push = false`).
+- RDS uses low baseline settings (single-AZ, `db.t3.micro`, 20 GiB storage, 1-day backup retention).
+
+Use `deploy/terraform/environments/dev.tfvars.example` as the baseline and enable only what is needed.

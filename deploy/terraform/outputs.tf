@@ -47,3 +47,54 @@ output "artifacts" {
     package_registry_domain_owner = module.artifacts.package_registry_domain_owner
   }
 }
+
+output "helm_values" {
+  description = "Normalized non-sensitive values contract for Helm consumption."
+  value = {
+    global = {
+      awsRegion = var.aws_region
+    }
+    images = {
+      apiRepository        = module.artifacts.ecr_repository_urls.api
+      webRepository        = module.artifacts.ecr_repository_urls.web
+      toolServerRepository = module.artifacts.ecr_repository_urls.tool_server
+    }
+    api = {
+      env = {
+        opensearchUrl   = "https://${module.opensearch.endpoint}"
+        opensearchIndex = var.opensearch_index_name
+      }
+      infra = {
+        rdsEndpoint = module.rds.endpoint
+        rdsPort     = module.rds.port
+        rdsDatabase = module.rds.database_name
+      }
+    }
+    artifacts = {
+      pythonPackageRegistryUrl = module.artifacts.package_registry_url
+    }
+  }
+}
+
+output "helm_secret_refs" {
+  description = "Normalized secret-reference contract for Helm consumption."
+  value = {
+    api = {
+      database = {
+        secretName = module.rds.database_secret_name
+        secretArn  = module.rds.database_secret_arn
+      }
+      opensearch = {
+        usernameSecretName = module.opensearch.username_secret_name
+        passwordSecretName = module.opensearch.password_secret_name
+        usernameSecretArn  = module.opensearch.username_secret_arn
+        passwordSecretArn  = module.opensearch.password_secret_arn
+      }
+    }
+  }
+}
+
+output "terraform_output_contract_version" {
+  description = "Version marker for Terraform->Helm normalized output contract."
+  value       = "v1"
+}

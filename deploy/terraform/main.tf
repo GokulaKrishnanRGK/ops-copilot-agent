@@ -31,6 +31,8 @@ module "opensearch" {
 module "artifacts" {
   source = "./modules/artifacts"
 
-  name_prefix = local.name_prefix
-  tags        = local.common_tags
+  name_prefix                    = local.name_prefix
+  tags                           = local.common_tags
+  create_python_package_registry = var.artifacts_create_python_package_registry
+  ecr_scan_on_push               = var.artifacts_ecr_scan_on_push
 }
