@@ -46,3 +46,15 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 default
 {{- end -}}
 {{- end -}}
+
+{{- define "opscopilot.apiServiceName" -}}
+{{ printf "%s-api" (include "opscopilot.fullname" .) }}
+{{- end -}}
+
+{{- define "opscopilot.webServiceName" -}}
+{{ printf "%s-web" (include "opscopilot.fullname" .) }}
+{{- end -}}
+
+{{- define "opscopilot.toolServerServiceName" -}}
+{{ printf "%s-tool-server" (include "opscopilot.fullname" .) }}
+{{- end -}}

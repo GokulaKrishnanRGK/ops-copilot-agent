@@ -1,6 +1,7 @@
 {{- if .Values.api.enabled }}
 {{- $apiImageRepo := coalesce .Values.terraform.helmValues.images.apiRepository .Values.images.apiRepository -}}
 {{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
+{{- $toolServerUrl := printf "http://%s:%v/mcp" (include "opscopilot.toolServerServiceName" .) (.Values.toolServer.service.port | int) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,6 +38,10 @@ spec:
               value: {{ .Values.global.logLevel | quote }}
             - name: AWS_REGION
               value: {{ $awsRegion | quote }}
+            {{- if not (hasKey .Values.api.env "MCP_BASE_URL") }}
+            - name: MCP_BASE_URL
+              value: {{ $toolServerUrl | quote }}
+            {{- end }}
             {{- if .Values.terraform.helmSecretRefs.api.database.secretName }}
             - name: DATABASE_URL
               valueFrom:
@@ -83,6 +88,22 @@ spec:
             - secretRef:
                 name: {{ . | quote }}
             {{- end }}
+          {{- end }}
+          {{- if .Values.api.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.api.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.liveness.periodSeconds }}
+          {{- end }}
+          {{- if .Values.api.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.api.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.api.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.probes.readiness.periodSeconds }}
           {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}

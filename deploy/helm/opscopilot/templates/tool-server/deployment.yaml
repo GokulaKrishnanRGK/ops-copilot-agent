@@ -56,6 +56,22 @@ spec:
                 name: {{ . | quote }}
             {{- end }}
           {{- end }}
+          {{- if .Values.toolServer.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.toolServer.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.toolServer.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.toolServer.probes.liveness.periodSeconds }}
+          {{- end }}
+          {{- if .Values.toolServer.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.toolServer.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.toolServer.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.toolServer.probes.readiness.periodSeconds }}
+          {{- end }}
           resources:
             {{- toYaml .Values.toolServer.resources | nindent 12 }}
 {{- end }}
