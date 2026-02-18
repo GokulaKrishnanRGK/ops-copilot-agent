@@ -1,4 +1,4 @@
-`global:
+global:
   imageTag: "dev"
   awsRegion: ""
   logLevel: "INFO"
@@ -20,6 +20,11 @@ api:
   resources: {}
   env: {}
   secretEnv: {}
+  secretRefs: []
+  secrets:
+    databaseUrlKey: "DATABASE_URL"
+    opensearchUsernameKey: "username"
+    opensearchPasswordKey: "password"
 
 web:
   enabled: true
@@ -48,6 +53,7 @@ toolServer:
   resources: {}
   env: {}
   secretEnv: {}
+  secretRefs: []
 
 observability:
   otelCollector:
@@ -89,3 +95,41 @@ ingress:
   tls: []
 
 imagePullSecrets: []
+
+terraform:
+  outputContractVersion: ""
+  helmValues:
+    global:
+      awsRegion: ""
+    images:
+      apiRepository: ""
+      webRepository: ""
+      toolServerRepository: ""
+    api:
+      env:
+        opensearchUrl: ""
+        opensearchIndex: ""
+      infra:
+        rdsEndpoint: ""
+        rdsPort: 0
+        rdsDatabase: ""
+    artifacts:
+      pythonPackageRegistryUrl: ""
+    ingress:
+      domainName: ""
+      tls:
+        certificateArn: ""
+  helmSecretRefs:
+    api:
+      database:
+        secretName: ""
+        secretArn: ""
+      opensearch:
+        usernameSecretName: ""
+        passwordSecretName: ""
+        usernameSecretArn: ""
+        passwordSecretArn: ""
+  dnsContract:
+    ingress_domain_name: ""
+    route53_hosted_zone_id: ""
+    acm_certificate_arn: ""

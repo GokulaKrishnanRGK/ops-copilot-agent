@@ -1,4 +1,6 @@
 {{- if .Values.api.enabled }}
+{{- $apiImageRepo := coalesce .Values.terraform.helmValues.images.apiRepository .Values.images.apiRepository -}}
+{{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,7 +27,7 @@ spec:
       {{- end }}
       containers:
         - name: api
-          image: "{{ .Values.images.apiRepository }}:{{ .Values.global.imageTag }}"
+          image: "{{ $apiImageRepo }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           ports:
             - containerPort: {{ .Values.api.containerPort }}
@@ -34,11 +36,54 @@ spec:
             - name: LOG_LEVEL
               value: {{ .Values.global.logLevel | quote }}
             - name: AWS_REGION
-              value: {{ .Values.global.awsRegion | quote }}
+              value: {{ $awsRegion | quote }}
+            {{- if .Values.terraform.helmSecretRefs.api.database.secretName }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.terraform.helmSecretRefs.api.database.secretName | quote }}
+                  key: {{ .Values.api.secrets.databaseUrlKey | quote }}
+            {{- end }}
+            {{- if .Values.terraform.helmSecretRefs.api.opensearch.usernameSecretName }}
+            - name: OPENSEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.terraform.helmSecretRefs.api.opensearch.usernameSecretName | quote }}
+                  key: {{ .Values.api.secrets.opensearchUsernameKey | quote }}
+            {{- end }}
+            {{- if .Values.terraform.helmSecretRefs.api.opensearch.passwordSecretName }}
+            - name: OPENSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.terraform.helmSecretRefs.api.opensearch.passwordSecretName | quote }}
+                  key: {{ .Values.api.secrets.opensearchPasswordKey | quote }}
+            {{- end }}
+            {{- if .Values.terraform.helmValues.api.env.opensearchUrl }}
+            - name: OPENSEARCH_URL
+              value: {{ .Values.terraform.helmValues.api.env.opensearchUrl | quote }}
+            {{- end }}
+            {{- if .Values.terraform.helmValues.api.env.opensearchIndex }}
+            - name: OPENSEARCH_INDEX
+              value: {{ .Values.terraform.helmValues.api.env.opensearchIndex | quote }}
+            {{- end }}
             {{- range $key, $value := .Values.api.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- range $key, $ref := .Values.api.secretEnv }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secretName | quote }}
+                  key: {{ $ref.secretKey | quote }}
+            {{- end }}
+          {{- if .Values.api.secretRefs }}
+          envFrom:
+            {{- range .Values.api.secretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
 {{- end }}
