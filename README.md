@@ -130,7 +130,7 @@ OpsCopilot is deployable to Kubernetes using Helm.
 - External database supported
 
 Example:
-`helm install opscopilot ./charts/opscopilot -f values.yaml`
+`helm install opscopilot ./deploy/helm/opscopilot -f ./deploy/helm/opscopilot/values.yaml`
 
 ---
 

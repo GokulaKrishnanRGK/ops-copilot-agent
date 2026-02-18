@@ -1,0 +1,45 @@
+{{- if .Values.toolServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opscopilot.fullname" . }}-tool-server
+  namespace: {{ include "opscopilot.namespace" . }}
+  labels:
+    {{- include "opscopilot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tool-server
+spec:
+  replicas: {{ .Values.toolServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "opscopilot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: tool-server
+  template:
+    metadata:
+      labels:
+        {{- include "opscopilot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: tool-server
+    spec:
+      serviceAccountName: {{ include "opscopilot.serviceAccountName" . }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: tool-server
+          image: "{{ .Values.images.toolServerRepository }}:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.toolServer.containerPort }}
+              name: http
+          env:
+            - name: LOG_LEVEL
+              value: {{ .Values.global.logLevel | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.global.awsRegion | quote }}
+            {{- range $key, $value := .Values.toolServer.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.toolServer.resources | nindent 12 }}
+{{- end }}

@@ -1,0 +1,19 @@
+{{- if .Values.toolServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opscopilot.fullname" . }}-tool-server
+  namespace: {{ include "opscopilot.namespace" . }}
+  labels:
+    {{- include "opscopilot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tool-server
+spec:
+  type: {{ .Values.toolServer.service.type }}
+  selector:
+    {{- include "opscopilot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: tool-server
+  ports:
+    - name: http
+      port: {{ .Values.toolServer.service.port }}
+      targetPort: http
+{{- end }}

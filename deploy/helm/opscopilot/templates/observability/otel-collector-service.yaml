@@ -1,0 +1,22 @@
+{{- if .Values.observability.otelCollector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opscopilot.fullname" . }}-otel-collector
+  namespace: {{ include "opscopilot.namespace" . }}
+  labels:
+    {{- include "opscopilot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  type: {{ .Values.observability.otelCollector.service.type }}
+  selector:
+    {{- include "opscopilot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: {{ .Values.observability.otelCollector.service.grpcPort }}
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: {{ .Values.observability.otelCollector.service.httpPort }}
+      targetPort: otlp-http
+{{- end }}

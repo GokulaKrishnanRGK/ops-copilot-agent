@@ -1,0 +1,10 @@
+OpsCopilot chart has been installed.
+
+Release: {{ .Release.Name }}
+Namespace: {{ include "opscopilot.namespace" . }}
+
+Enabled components:
+- api: {{ .Values.api.enabled }}
+- web: {{ .Values.web.enabled }}
+- toolServer: {{ .Values.toolServer.enabled }}
+- otelCollector: {{ .Values.observability.otelCollector.enabled }}

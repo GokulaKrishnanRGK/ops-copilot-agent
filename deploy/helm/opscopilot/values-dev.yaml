@@ -1,0 +1,19 @@
+global:
+  imageTag: "dev"
+  logLevel: "DEBUG"
+
+api:
+  replicaCount: 1
+
+web:
+  replicaCount: 1
+
+toolServer:
+  replicaCount: 1
+  rbac:
+    allowedNamespaces:
+      - default
+
+observability:
+  otelCollector:
+    enabled: true
