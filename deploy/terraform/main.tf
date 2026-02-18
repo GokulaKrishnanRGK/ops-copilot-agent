@@ -13,6 +13,7 @@ module "rds" {
   name_prefix          = local.name_prefix
   tags                 = local.common_tags
   vpc_id               = module.network.vpc_id
+  vpc_cidr             = var.network_vpc_cidr
   private_subnet_ids   = module.network.private_subnet_ids
   security_group_id    = module.network.app_security_group_id
   database_secret_name = "${local.name_prefix}-db"
@@ -24,6 +25,7 @@ module "opensearch" {
   name_prefix        = local.name_prefix
   tags               = local.common_tags
   vpc_id             = module.network.vpc_id
+  vpc_cidr           = var.network_vpc_cidr
   private_subnet_ids = module.network.private_subnet_ids
   security_group_id  = module.network.app_security_group_id
 }

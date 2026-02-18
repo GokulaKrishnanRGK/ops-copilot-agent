@@ -14,7 +14,7 @@ fi
 
 tf_dir="deploy/terraform"
 tf_env="${TF_ENV:-dev}"
-tf_vars_file="${TF_VARS_FILE:-${tf_dir}/environments/def.tfvars}"
+tf_vars_file="${TF_VARS_FILE:-${tf_dir}/environments/${tf_env}.tfvars}"
 tf_state_key="${TF_STATE_KEY:-ops-copilot/${tf_env}/terraform.tfstate}"
 tf_auto_approve="${TF_AUTO_APPROVE:-0}"
 

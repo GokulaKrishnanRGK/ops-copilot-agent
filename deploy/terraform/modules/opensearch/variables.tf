@@ -13,6 +13,11 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "vpc_cidr" {
+  description = "VPC CIDR block."
+  type        = string
+}
+
 variable "private_subnet_ids" {
   description = "Private subnet identifiers."
   type        = list(string)
