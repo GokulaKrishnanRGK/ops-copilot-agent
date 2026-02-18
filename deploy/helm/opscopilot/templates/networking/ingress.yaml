@@ -29,11 +29,19 @@ spec:
       http:
         paths:
           {{- range .paths }}
+          {{- $svcName := .service }}
+          {{- if eq .service "api" }}
+          {{- $svcName = include "opscopilot.apiServiceName" $ }}
+          {{- else if eq .service "web" }}
+          {{- $svcName = include "opscopilot.webServiceName" $ }}
+          {{- else if eq .service "tool-server" }}
+          {{- $svcName = include "opscopilot.toolServerServiceName" $ }}
+          {{- end }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "opscopilot.fullname" $ }}-{{ .service }}
+                name: {{ $svcName }}
                 port:
                   number: {{ .port }}
           {{- end }}

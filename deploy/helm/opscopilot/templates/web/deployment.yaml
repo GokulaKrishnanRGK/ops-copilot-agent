@@ -32,10 +32,30 @@ spec:
             - containerPort: {{ .Values.web.containerPort }}
               name: http
           env:
+            {{- if not (hasKey .Values.web.env "WEB_API_BASE_URL") }}
+            - name: WEB_API_BASE_URL
+              value: "/api"
+            {{- end }}
             {{- range $key, $value := .Values.web.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+          {{- if .Values.web.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.web.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.web.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.probes.liveness.periodSeconds }}
+          {{- end }}
+          {{- if .Values.web.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.web.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.web.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.probes.readiness.periodSeconds }}
+          {{- end }}
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
 {{- end }}

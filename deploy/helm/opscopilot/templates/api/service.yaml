@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "opscopilot.fullname" . }}-api
+  name: {{ include "opscopilot.apiServiceName" . }}
   namespace: {{ include "opscopilot.namespace" . }}
   labels:
     {{- include "opscopilot.labels" . | nindent 4 }}
