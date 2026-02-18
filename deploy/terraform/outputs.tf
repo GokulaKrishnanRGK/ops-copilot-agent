@@ -106,11 +106,10 @@ output "terraform_output_contract_version" {
 }
 
 output "dns_contract" {
-  description = "Domain/DNS/TLS contract placeholders for M12 Route53 + ACM provisioning."
+  description = "Domain/DNS/TLS contract placeholders for Route53 + ACM provisioning."
   value = {
     ingress_domain_name    = var.ingress_domain_name != "" ? var.ingress_domain_name : null
     route53_hosted_zone_id = var.route53_hosted_zone_id != "" ? var.route53_hosted_zone_id : null
     acm_certificate_arn    = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
-    provisioning_milestone = "M12"
   }
 }

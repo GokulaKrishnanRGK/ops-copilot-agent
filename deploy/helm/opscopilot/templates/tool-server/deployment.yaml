@@ -1,4 +1,6 @@
 {{- if .Values.toolServer.enabled }}
+{{- $toolImageRepo := coalesce .Values.terraform.helmValues.images.toolServerRepository .Values.images.toolServerRepository -}}
+{{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,7 +28,7 @@ spec:
       {{- end }}
       containers:
         - name: tool-server
-          image: "{{ .Values.images.toolServerRepository }}:{{ .Values.global.imageTag }}"
+          image: "{{ $toolImageRepo }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           ports:
             - containerPort: {{ .Values.toolServer.containerPort }}
@@ -35,11 +37,25 @@ spec:
             - name: LOG_LEVEL
               value: {{ .Values.global.logLevel | quote }}
             - name: AWS_REGION
-              value: {{ .Values.global.awsRegion | quote }}
+              value: {{ $awsRegion | quote }}
             {{- range $key, $value := .Values.toolServer.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- range $key, $ref := .Values.toolServer.secretEnv }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secretName | quote }}
+                  key: {{ $ref.secretKey | quote }}
+            {{- end }}
+          {{- if .Values.toolServer.secretRefs }}
+          envFrom:
+            {{- range .Values.toolServer.secretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.toolServer.resources | nindent 12 }}
 {{- end }}

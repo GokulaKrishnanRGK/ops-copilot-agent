@@ -1,4 +1,5 @@
 {{- if .Values.web.enabled }}
+{{- $webImageRepo := coalesce .Values.terraform.helmValues.images.webRepository .Values.images.webRepository -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,7 +26,7 @@ spec:
       {{- end }}
       containers:
         - name: web
-          image: "{{ .Values.images.webRepository }}:{{ .Values.global.imageTag }}"
+          image: "{{ $webImageRepo }}:{{ .Values.global.imageTag }}"
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           ports:
             - containerPort: {{ .Values.web.containerPort }}
