@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down rag-ingest run-api run-tool-server run-local run-local-down smoke-local kind-up kind-down kind-kubeconfig kind-seed docker-build-api docker-build-web docker-build-tool-server docker-build-images
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down rag-ingest run-api run-tool-server run-local run-local-down smoke-local kind-up kind-down kind-kubeconfig kind-seed docker-build-api docker-build-web docker-build-tool-server docker-build-images tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -11,6 +11,10 @@ KIND_BOOTSTRAP ?= 1
 KIND_SEED_WORKLOADS ?= 1
 KIND_CLUSTER_NAME ?= opscopilot-local
 KUBECONFIG_HANDOFF_PATH ?= /tmp/opscopilot-kind-kubeconfig
+TF_ENV ?= dev
+TF_VARS_FILE ?= deploy/terraform/environments/$(TF_ENV).tfvars
+TF_STATE_KEY ?= ops-copilot/$(TF_ENV)/terraform.tfstate
+TF_AUTO_APPROVE ?= 0
 
 build:
 	cd apps/web && npm run build
@@ -147,3 +151,24 @@ run-local-down:
 
 smoke-local:
 	SMOKE_API_BASE_URL="$${SMOKE_API_BASE_URL:-http://localhost:8000/api}" SMOKE_PROMPT="$${SMOKE_PROMPT:-List the Kubernetes pods in namespace default and report their status.}" bash scripts/smoke-local.sh
+
+tf-init:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" bash scripts/terraform.sh init
+
+tf-plan:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" bash scripts/terraform.sh plan
+
+tf-apply:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" TF_AUTO_APPROVE="$(TF_AUTO_APPROVE)" bash scripts/terraform.sh apply
+
+tf-destroy:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" TF_AUTO_APPROVE="$(TF_AUTO_APPROVE)" bash scripts/terraform.sh destroy
+
+tf-output:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" bash scripts/terraform.sh output
+
+tf-fmt:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" bash scripts/terraform.sh fmt
+
+tf-validate:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" bash scripts/terraform.sh validate

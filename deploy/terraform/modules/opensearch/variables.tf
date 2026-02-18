@@ -44,7 +44,7 @@ variable "instance_count" {
 variable "volume_size" {
   description = "EBS volume size in GiB."
   type        = number
-  default     = 20
+  default     = 10
 }
 
 variable "master_username" {

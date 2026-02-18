@@ -17,13 +17,13 @@ variable "ecr_image_tag_mutability" {
 variable "ecr_scan_on_push" {
   description = "Enable ECR image scanning on push."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "create_python_package_registry" {
   description = "Create CodeArtifact domain/repository for Python packages."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "codeartifact_domain_name" {

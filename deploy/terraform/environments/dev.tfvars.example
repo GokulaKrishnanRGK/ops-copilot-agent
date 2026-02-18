@@ -1,0 +1,13 @@
+aws_region         = "us-east-1"
+project_name       = "ops-copilot"
+environment        = "dev"
+network_vpc_cidr   = "10.42.0.0/16"
+network_az_count   = 2
+opensearch_index_name = "opscopilot-docs"
+artifacts_create_python_package_registry = false
+artifacts_ecr_scan_on_push = false
+
+# Optional overrides:
+# tags = {
+#   owner = "platform-team"
+# }
