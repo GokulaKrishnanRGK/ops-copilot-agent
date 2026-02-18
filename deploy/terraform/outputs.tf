@@ -38,7 +38,12 @@ output "opensearch" {
 output "artifacts" {
   description = "Artifact registry contract outputs."
   value = {
-    ecr_repositories     = module.artifacts.ecr_repositories
-    package_registry_url = module.artifacts.package_registry_url
+    ecr_repositories              = module.artifacts.ecr_repositories
+    ecr_repository_urls           = module.artifacts.ecr_repository_urls
+    ecr_repository_arns           = module.artifacts.ecr_repository_arns
+    package_registry_url          = module.artifacts.package_registry_url
+    package_registry_domain       = module.artifacts.package_registry_domain
+    package_registry_repository   = module.artifacts.package_registry_repository
+    package_registry_domain_owner = module.artifacts.package_registry_domain_owner
   }
 }
