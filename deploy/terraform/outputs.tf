@@ -28,6 +28,10 @@ output "opensearch" {
     endpoint             = module.opensearch.endpoint
     username_secret_name = module.opensearch.username_secret_name
     password_secret_name = module.opensearch.password_secret_name
+    domain_arn           = module.opensearch.domain_arn
+    security_group_id    = module.opensearch.security_group_id
+    username_secret_arn  = module.opensearch.username_secret_arn
+    password_secret_arn  = module.opensearch.password_secret_arn
   }
 }
 
