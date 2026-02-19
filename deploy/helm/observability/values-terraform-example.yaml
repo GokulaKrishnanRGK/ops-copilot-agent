@@ -1,0 +1,16 @@
+terraform:
+  outputContractVersion: "v1"
+  helmValues:
+    observability:
+      grafana:
+        domainName: "observe.ops.example.com"
+        tls:
+          certificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxx"
+  dnsContract:
+    observability_domain_name: "observe.ops.example.com"
+    route53_hosted_zone_id: "Z123456ABCDEFG"
+    acm_certificate_arn: "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxx"
+
+grafana:
+  ingress:
+    enabled: true

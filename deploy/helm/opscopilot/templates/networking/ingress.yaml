@@ -1,6 +1,7 @@
 {{- if .Values.ingress.enabled }}
 {{- $terraformDomain := coalesce .Values.terraform.dnsContract.ingress_domain_name .Values.terraform.helmValues.ingress.domainName "" -}}
 {{- $tlsCertArn := coalesce .Values.terraform.dnsContract.acm_certificate_arn .Values.terraform.helmValues.ingress.tls.certificateArn "" -}}
+{{- $hostedZoneId := .Values.terraform.dnsContract.route53_hosted_zone_id -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -8,10 +9,26 @@ metadata:
   namespace: {{ include "opscopilot.namespace" . }}
   labels:
     {{- include "opscopilot.labels" . | nindent 4 }}
-  {{- if or $tlsCertArn .Values.ingress.annotations }}
+  {{- if or $tlsCertArn .Values.ingress.annotations .Values.ingress.alb.enabled (and .Values.ingress.route53.enabled .Values.ingress.route53.useExternalDNS) }}
   annotations:
+    {{- if .Values.ingress.alb.enabled }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.alb.targetType | quote }}
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.alb.healthcheckPath | quote }}
+    alb.ingress.kubernetes.io/listen-ports: {{ .Values.ingress.alb.listenPortsJson | quote }}
+    {{- if .Values.ingress.alb.sslRedirect }}
+    alb.ingress.kubernetes.io/ssl-redirect: {{ .Values.ingress.alb.sslRedirect | quote }}
+    {{- end }}
+    {{- end }}
     {{- if $tlsCertArn }}
     alb.ingress.kubernetes.io/certificate-arn: {{ $tlsCertArn | quote }}
+    {{- end }}
+    {{- if and .Values.ingress.route53.enabled .Values.ingress.route53.useExternalDNS $terraformDomain }}
+    external-dns.alpha.kubernetes.io/hostname: {{ $terraformDomain | quote }}
+    external-dns.alpha.kubernetes.io/ttl: {{ .Values.ingress.route53.ttl | quote }}
+    {{- if $hostedZoneId }}
+    external-dns.alpha.kubernetes.io/hosted-zone-id: {{ $hostedZoneId | quote }}
+    {{- end }}
     {{- end }}
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}

@@ -13,7 +13,4 @@ toolServer:
   rbac:
     allowedNamespaces:
       - default
-
-observability:
-  otelCollector:
-    enabled: true
+      - observability

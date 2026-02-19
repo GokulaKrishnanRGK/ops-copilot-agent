@@ -1,5 +1,6 @@
 {{- if .Values.web.enabled }}
 {{- $webImageRepo := coalesce .Values.terraform.helmValues.images.webRepository .Values.images.webRepository -}}
+{{- $ecrPullSecret := .Values.artifacts.ecr.imagePullSecretName -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,9 +21,14 @@ spec:
         {{- include "opscopilot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: web
     spec:
-      {{- if .Values.imagePullSecrets }}
+      {{- if or .Values.imagePullSecrets $ecrPullSecret }}
       imagePullSecrets:
-        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+        {{- with .Values.imagePullSecrets }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ecrPullSecret }}
+        - name: {{ $ecrPullSecret | quote }}
+        {{- end }}
       {{- end }}
       containers:
         - name: web

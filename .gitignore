@@ -242,6 +242,9 @@ web_modules/
 .env.production.local
 .env.local
 
+# local/private deployment overrides (must never be committed)
+deploy/terraform/environments/dev.tfvars
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

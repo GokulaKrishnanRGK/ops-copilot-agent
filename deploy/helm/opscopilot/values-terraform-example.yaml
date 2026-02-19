@@ -41,3 +41,12 @@ api:
     databaseUrlKey: "DATABASE_URL"
     opensearchUsernameKey: "username"
     opensearchPasswordKey: "password"
+
+artifacts:
+  ecr:
+    imagePullSecretName: "opscopilot-ecr-pull"
+  pythonPackageRegistry:
+    enabled: true
+    auth:
+      secretName: "opscopilot-codeartifact-token"
+      tokenKey: "token"

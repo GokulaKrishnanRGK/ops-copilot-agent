@@ -7,4 +7,3 @@ Enabled components:
 - api: {{ .Values.api.enabled }}
 - web: {{ .Values.web.enabled }}
 - toolServer: {{ .Values.toolServer.enabled }}
-- otelCollector: {{ .Values.observability.otelCollector.enabled }}

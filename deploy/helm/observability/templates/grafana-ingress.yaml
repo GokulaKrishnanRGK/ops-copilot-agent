@@ -1,0 +1,42 @@
+{{- $host := coalesce .Values.grafana.ingress.host .Values.terraform.helmValues.observability.grafana.domainName .Values.terraform.dnsContract.observability_domain_name "" -}}
+{{- if and .Values.grafana.enabled .Values.grafana.ingress.enabled $host }}
+{{- $certArn := coalesce .Values.grafana.ingress.tls.certificateArn .Values.terraform.helmValues.observability.grafana.tls.certificateArn .Values.terraform.dnsContract.acm_certificate_arn "" -}}
+{{- $zoneId := coalesce .Values.grafana.ingress.tls.hostedZoneId .Values.terraform.dnsContract.route53_hosted_zone_id "" -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.grafana.ingress.className | quote }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.grafana.ingress.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.grafana.ingress.alb.targetType | quote }}
+    alb.ingress.kubernetes.io/listen-ports: {{ .Values.grafana.ingress.alb.listenPortsJson | quote }}
+    alb.ingress.kubernetes.io/ssl-redirect: {{ .Values.grafana.ingress.alb.sslRedirect | quote }}
+    {{- if $certArn }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ $certArn | quote }}
+    {{- end }}
+    {{- if and .Values.grafana.ingress.route53.enabled $host }}
+    external-dns.alpha.kubernetes.io/hostname: {{ $host | quote }}
+    external-dns.alpha.kubernetes.io/ttl: {{ .Values.grafana.ingress.route53.ttl | quote }}
+    {{- if $zoneId }}
+    external-dns.alpha.kubernetes.io/hosted-zone-id: {{ $zoneId | quote }}
+    {{- end }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.grafana.ingress.className | quote }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.grafana.ingress.path }}
+            pathType: {{ .Values.grafana.ingress.pathType }}
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: {{ .Values.grafana.service.port }}
+{{- end }}

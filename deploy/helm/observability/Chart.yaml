@@ -1,0 +1,6 @@
+apiVersion: v2
+name: opscopilot-observability
+description: Helm chart for OpsCopilot observability stack (Loki, Tempo, Prometheus, Grafana, Alloy, OTel Collector)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

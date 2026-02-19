@@ -1,0 +1,93 @@
+global:
+  namespaceOverride: ""
+
+loki:
+  enabled: true
+  image: "grafana/loki:3.1.1"
+  service:
+    port: 3100
+  storage:
+    type: emptyDir
+    pvc:
+      storageClassName: ""
+      size: 10Gi
+
+tempo:
+  enabled: true
+  image: "grafana/tempo:2.6.0"
+  service:
+    queryPort: 3200
+    otlpGrpcPort: 4317
+    otlpHttpPort: 4318
+  storage:
+    type: emptyDir
+    pvc:
+      storageClassName: ""
+      size: 10Gi
+
+prometheus:
+  enabled: true
+  image: "prom/prometheus:v2.54.1"
+  service:
+    port: 9090
+  storage:
+    type: emptyDir
+    pvc:
+      storageClassName: ""
+      size: 10Gi
+
+grafana:
+  enabled: true
+  image: "grafana/grafana:11.1.0"
+  adminUser: "admin"
+  adminPassword: "admin"
+  service:
+    port: 3000
+  storage:
+    type: emptyDir
+    pvc:
+      storageClassName: ""
+      size: 5Gi
+  ingress:
+    enabled: false
+    className: "alb"
+    host: ""
+    path: "/"
+    pathType: Prefix
+    alb:
+      scheme: "internet-facing"
+      targetType: "ip"
+      sslRedirect: 443
+      listenPortsJson: '[{"HTTP":80},{"HTTPS":443}]'
+    route53:
+      enabled: true
+      ttl: 60
+    tls:
+      certificateArn: ""
+      hostedZoneId: ""
+
+alloy:
+  enabled: true
+  image: "grafana/alloy:v1.5.1"
+
+otelCollector:
+  enabled: true
+  image: "otel/opentelemetry-collector-contrib:0.103.0"
+  service:
+    otlpGrpcPort: 4317
+    otlpHttpPort: 4318
+    prometheusPort: 8889
+    healthPort: 13133
+
+terraform:
+  outputContractVersion: ""
+  helmValues:
+    observability:
+      grafana:
+        domainName: ""
+        tls:
+          certificateArn: ""
+  dnsContract:
+    observability_domain_name: ""
+    route53_hosted_zone_id: ""
+    acm_certificate_arn: ""
