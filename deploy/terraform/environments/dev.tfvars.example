@@ -1,4 +1,5 @@
 aws_region         = "us-east-1"
+aws_profile        = "gkProd"
 project_name       = "ops-copilot"
 environment        = "dev"
 network_vpc_cidr   = "10.42.0.0/16"
@@ -7,10 +8,11 @@ opensearch_index_name = "opscopilot-docs"
 artifacts_create_python_package_registry = false
 artifacts_ecr_scan_on_push = false
 
-# placeholders only. Route53 + ACM provisioning is handled later
-ingress_domain_name    = ""
-route53_hosted_zone_id = ""
-acm_certificate_arn    = ""
+# private values: do not commit your real domain/certificate metadata
+ingress_domain_name    = "your-private-domain.example"
+observability_domain_name = "observe.your-private-domain.example"
+route53_hosted_zone_id = "ZXXXXXXXXXXXXX"
+acm_certificate_arn    = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # Optional overrides:
 # tags = {

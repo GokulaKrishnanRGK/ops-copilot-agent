@@ -1,6 +1,7 @@
 {{- if .Values.toolServer.enabled }}
 {{- $toolImageRepo := coalesce .Values.terraform.helmValues.images.toolServerRepository .Values.images.toolServerRepository -}}
 {{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
+{{- $ecrPullSecret := .Values.artifacts.ecr.imagePullSecretName -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,9 +23,14 @@ spec:
         app.kubernetes.io/component: tool-server
     spec:
       serviceAccountName: {{ include "opscopilot.serviceAccountName" . }}
-      {{- if .Values.imagePullSecrets }}
+      {{- if or .Values.imagePullSecrets $ecrPullSecret }}
       imagePullSecrets:
-        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+        {{- with .Values.imagePullSecrets }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ecrPullSecret }}
+        - name: {{ $ecrPullSecret | quote }}
+        {{- end }}
       {{- end }}
       containers:
         - name: tool-server

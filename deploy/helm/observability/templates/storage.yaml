@@ -1,0 +1,75 @@
+{{- if and .Values.loki.enabled (eq .Values.loki.storage.type "pvc") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loki-data
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loki
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.loki.storage.pvc.size }}
+  {{- if .Values.loki.storage.pvc.storageClassName }}
+  storageClassName: {{ .Values.loki.storage.pvc.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.tempo.enabled (eq .Values.tempo.storage.type "pvc") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tempo-data
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tempo
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.tempo.storage.pvc.size }}
+  {{- if .Values.tempo.storage.pvc.storageClassName }}
+  storageClassName: {{ .Values.tempo.storage.pvc.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.prometheus.enabled (eq .Values.prometheus.storage.type "pvc") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.prometheus.storage.pvc.size }}
+  {{- if .Values.prometheus.storage.pvc.storageClassName }}
+  storageClassName: {{ .Values.prometheus.storage.pvc.storageClassName | quote }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.grafana.enabled (eq .Values.grafana.storage.type "pvc") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.grafana.storage.pvc.size }}
+  {{- if .Values.grafana.storage.pvc.storageClassName }}
+  storageClassName: {{ .Values.grafana.storage.pvc.storageClassName | quote }}
+  {{- end }}
+{{- end }}

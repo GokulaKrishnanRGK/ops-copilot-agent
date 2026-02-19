@@ -1,0 +1,275 @@
+{{- if .Values.loki.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: loki
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: loki
+    spec:
+      containers:
+        - name: loki
+          image: {{ .Values.loki.image | quote }}
+          args: ["-config.file=/etc/loki/config.yml", "-log.format=json"]
+          ports:
+            - name: http
+              containerPort: 3100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /loki
+      volumes:
+        - name: config
+          configMap:
+            name: loki-config
+        - name: data
+          {{- if eq .Values.loki.storage.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: loki-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+{{- end }}
+{{- if .Values.tempo.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tempo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: tempo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: tempo
+    spec:
+      containers:
+        - name: tempo
+          image: {{ .Values.tempo.image | quote }}
+          args: ["-config.file=/etc/tempo/tempo.yml"]
+          ports:
+            - name: query
+              containerPort: 3200
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+            - name: data
+              mountPath: /tmp/tempo
+      volumes:
+        - name: config
+          configMap:
+            name: tempo-config
+        - name: data
+          {{- if eq .Values.tempo.storage.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: tempo-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: {{ .Values.prometheus.image | quote }}
+          args: ["--config.file=/etc/prometheus/prometheus.yml", "--log.format=json"]
+          ports:
+            - name: http
+              containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          {{- if eq .Values.prometheus.storage.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: prometheus-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+{{- end }}
+{{- if .Values.grafana.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: {{ .Values.grafana.image | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: {{ .Values.grafana.adminUser | quote }}
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: {{ .Values.grafana.adminPassword | quote }}
+            - name: GF_LOG_MODE
+              value: "console"
+            - name: GF_LOG_CONSOLE_FORMAT
+              value: "json"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /etc/grafana/dashboards
+            - name: data
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: data
+          {{- if eq .Values.grafana.storage.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: grafana-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+{{- end }}
+{{- if .Values.otelCollector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: {{ .Values.otelCollector.image | quote }}
+          args: ["--config=/etc/otel/collector-config.yml"]
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.otelCollector.service.otlpGrpcPort }}
+            - name: otlp-http
+              containerPort: {{ .Values.otelCollector.service.otlpHttpPort }}
+            - name: prom
+              containerPort: {{ .Values.otelCollector.service.prometheusPort }}
+            - name: health
+              containerPort: {{ .Values.otelCollector.service.healthPort }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+{{- end }}
+{{- if .Values.alloy.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alloy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: alloy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: alloy
+    spec:
+      containers:
+        - name: alloy
+          image: {{ .Values.alloy.image | quote }}
+          args: ["run", "/etc/alloy/config.alloy", "--server.http.listen-addr=0.0.0.0:12345"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+        - name: varlog
+          hostPath:
+            path: /var/log
+{{- end }}

@@ -79,6 +79,14 @@ output "helm_values" {
         certificateArn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
       }
     }
+    observability = {
+      grafana = {
+        domainName = var.observability_domain_name != "" ? var.observability_domain_name : null
+        tls = {
+          certificateArn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+        }
+      }
+    }
   }
 }
 
@@ -108,8 +116,9 @@ output "terraform_output_contract_version" {
 output "dns_contract" {
   description = "Domain/DNS/TLS contract placeholders for Route53 + ACM provisioning."
   value = {
-    ingress_domain_name    = var.ingress_domain_name != "" ? var.ingress_domain_name : null
-    route53_hosted_zone_id = var.route53_hosted_zone_id != "" ? var.route53_hosted_zone_id : null
-    acm_certificate_arn    = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+    ingress_domain_name       = var.ingress_domain_name != "" ? var.ingress_domain_name : null
+    observability_domain_name = var.observability_domain_name != "" ? var.observability_domain_name : null
+    route53_hosted_zone_id    = var.route53_hosted_zone_id != "" ? var.route53_hosted_zone_id : null
+    acm_certificate_arn       = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
   }
 }

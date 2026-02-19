@@ -16,6 +16,9 @@ api:
   service:
     type: ClusterIP
     port: 8000
+  serviceAlias:
+    enabled: false
+    name: "api"
   containerPort: 8000
   probes:
     liveness:
@@ -83,41 +86,27 @@ toolServer:
     create: true
     allowedNamespaces:
       - default
+      - observability
   resources: {}
   env: {}
   secretEnv: {}
   secretRefs: []
 
-observability:
-  otelCollector:
-    enabled: false
-    image: "otel/opentelemetry-collector-contrib:0.103.0"
-    replicaCount: 1
-    config: |
-      receivers:
-        otlp:
-          protocols:
-            grpc: {}
-            http: {}
-      exporters:
-        debug: {}
-      service:
-        pipelines:
-          traces:
-            receivers: [otlp]
-            exporters: [debug]
-          logs:
-            receivers: [otlp]
-            exporters: [debug]
-    service:
-      type: ClusterIP
-      grpcPort: 4317
-      httpPort: 4318
-
 ingress:
   enabled: false
-  className: ""
+  className: "alb"
   annotations: {}
+  alb:
+    enabled: true
+    scheme: "internet-facing"
+    targetType: "ip"
+    sslRedirect: 443
+    healthcheckPath: "/health"
+    listenPortsJson: '[{"HTTP":80},{"HTTPS":443}]'
+  route53:
+    enabled: true
+    useExternalDNS: true
+    ttl: 60
   hosts:
     - host: ""
       paths:
@@ -132,6 +121,42 @@ ingress:
   tls: []
 
 imagePullSecrets: []
+
+artifacts:
+  ecr:
+    imagePullSecretName: ""
+  pythonPackageRegistry:
+    enabled: true
+    indexUrl: ""
+    injectToApi: true
+    injectToMigrations: true
+    auth:
+      secretName: ""
+      tokenKey: "token"
+
+migrations:
+  enabled: true
+  hook:
+    enabled: true
+    deletePolicy: "before-hook-creation,hook-succeeded"
+    weight: "-5"
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 300
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+  command:
+    - sh
+    - -c
+    - cd /app/migrations && alembic -c alembic.ini upgrade head
+  env: {}
+  secretEnv: {}
+  database:
+    useTerraformDatabaseSecret: true
+    secretName: ""
+    secretKey: "DATABASE_URL"
 
 terraform:
   outputContractVersion: ""

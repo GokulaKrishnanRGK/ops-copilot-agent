@@ -1,0 +1,131 @@
+logging {
+  level  = "info"
+  format = "json"
+}
+
+local.file_match "kubernetes_logs" {
+  path_targets = [
+    {
+      __path__ = "/var/log/containers/*.log",
+      job      = "opscopilot",
+    },
+  ]
+}
+
+loki.source.file "kubernetes_logs" {
+  targets    = local.file_match.kubernetes_logs.targets
+  forward_to = [loki.process.kubernetes_logs.receiver]
+}
+
+loki.process "kubernetes_logs" {
+  stage.cri {}
+
+  stage.multiline {
+    firstline     = "^(\\{\\\"timestamp\\\"|\\d{4}-\\d{2}-\\d{2}T|\\d{4}/\\d{2}/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}|[0-9]{1,3}(\\.[0-9]{1,3}){3}\\s-\\s-\\s\\[|level=)"
+    max_wait_time = "2s"
+  }
+
+  stage.json {
+    source = "content"
+    expressions = {
+      timestamp    = "timestamp",
+      level        = "level",
+      service      = "service",
+      component    = "component",
+      message      = "message",
+      trace_id     = "trace_id",
+      span_id      = "span_id",
+      session_id   = "session_id",
+      agent_run_id = "agent_run_id",
+    }
+  }
+
+  stage.regex {
+    source     = "content"
+    expression = "^(?P<remote_addr>[0-9a-fA-F:\\.]+) - - \\[(?P<nginx_ts>[^\\]]+)\\] \\\"(?P<http_method>[A-Z]+) (?P<http_path>[^\\s]+) (?P<http_protocol>[^\\\"]+)\\\" (?P<http_status>\\d{3}) (?P<body_bytes>\\d+) \\\"(?P<http_referer>[^\\\"]*)\\\" \\\"(?P<http_user_agent>[^\\\"]*)\\\" \\\"(?P<request_id>[^\\\"]*)\\\"$"
+  }
+
+  stage.regex {
+    source     = "content"
+    expression = "^(?P<otel_text_ts>\\d{4}/\\d{2}/\\d{2}\\s\\d{2}:\\d{2}:\\d{2})\\s(?P<otel_text_level>[A-Z]+)\\s(?P<otel_text_message>.*)$"
+  }
+
+  stage.labels {
+    values = {
+      level        = "",
+      service      = "",
+      component    = "",
+      trace_id     = "",
+      session_id   = "",
+      agent_run_id = "",
+      http_method  = "",
+      http_status  = "",
+      http_path    = "",
+      remote_addr  = "",
+      otel_text_level = "",
+    }
+  }
+
+  stage.timestamp {
+    source           = "timestamp"
+    format           = "RFC3339"
+    fallback_formats = ["RFC3339Nano"]
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+local.file_match "opscopilot_file_logs" {
+  path_targets = [
+    {
+      __path__ = "/var/log/opscopilot/**/*.log*",
+      job      = "opscopilot",
+    },
+  ]
+}
+
+loki.source.file "opscopilot_file_logs" {
+  targets    = local.file_match.opscopilot_file_logs.targets
+  forward_to = [loki.process.opscopilot_file_logs.receiver]
+}
+
+loki.process "opscopilot_file_logs" {
+  stage.json {
+    expressions = {
+      timestamp    = "timestamp",
+      level        = "level",
+      service      = "service",
+      component    = "component",
+      message      = "message",
+      trace_id     = "trace_id",
+      span_id      = "span_id",
+      session_id   = "session_id",
+      agent_run_id = "agent_run_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level        = "",
+      service      = "",
+      component    = "",
+      trace_id     = "",
+      session_id   = "",
+      agent_run_id = "",
+    }
+  }
+
+  stage.timestamp {
+    source           = "timestamp"
+    format           = "RFC3339"
+    fallback_formats = ["RFC3339Nano"]
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

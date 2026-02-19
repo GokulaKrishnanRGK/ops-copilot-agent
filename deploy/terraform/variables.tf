@@ -68,6 +68,12 @@ variable "ingress_domain_name" {
   default     = ""
 }
 
+variable "observability_domain_name" {
+  description = "DNS name for observability ingress (Grafana)."
+  type        = string
+  default     = ""
+}
+
 variable "route53_hosted_zone_id" {
   description = "Route53 hosted zone ID for ingress record management."
   type        = string

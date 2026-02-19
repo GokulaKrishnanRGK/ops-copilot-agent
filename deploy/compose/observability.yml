@@ -1,18 +1,18 @@
 services:
   loki:
     image: grafana/loki:3.1.1
-    command: ["-config.file=/etc/loki/config.yml"]
+    command: ["-config.file=/etc/loki/config.yml", "-log.format=json"]
     ports:
       - "3100:3100"
     volumes:
-      - "../loki/config.yml:/etc/loki/config.yml:ro"
+      - "../helm/observability/files/loki/config.yml:/etc/loki/config.yml:ro"
       - loki-data:/loki
 
   alloy:
     image: grafana/alloy:v1.5.1
     command: ["run", "/etc/alloy/config.alloy", "--server.http.listen-addr=0.0.0.0:12345"]
     volumes:
-      - "../alloy/config.alloy:/etc/alloy/config.alloy:ro"
+      - "../helm/observability/files/alloy/config.alloy:/etc/alloy/config.alloy:ro"
       - "${LOGS_HOST_PATH:-/tmp/opscopilot-logs}:/var/log/opscopilot:ro"
     depends_on:
       - loki
@@ -24,16 +24,16 @@ services:
     ports:
       - "3200:3200"
     volumes:
-      - "../tempo/tempo.yml:/etc/tempo/tempo.yml:ro"
+      - "../helm/observability/files/tempo/tempo.yml:/etc/tempo/tempo.yml:ro"
       - tempo-data:/tmp/tempo
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--log.format=json"]
     ports:
       - "9090:9090"
     volumes:
-      - "../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "../helm/observability/files/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
       - prometheus-data:/prometheus
 
   grafana:
@@ -43,10 +43,12 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_LOG_MODE: "console"
+      GF_LOG_CONSOLE_FORMAT: "json"
     volumes:
-      - "../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro"
-      - "../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro"
-      - "../grafana/dashboards:/etc/grafana/dashboards:ro"
+      - "../helm/observability/files/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro"
+      - "../helm/observability/files/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro"
+      - "../helm/observability/files/grafana/dashboards:/etc/grafana/dashboards:ro"
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
@@ -62,7 +64,7 @@ services:
       - "8889:8889"
       - "13133:13133"
     volumes:
-      - "../otel/collector-config.yml:/etc/otelcol/config.yaml:ro"
+      - "../helm/observability/files/otel/collector-config.yml:/etc/otelcol/config.yaml:ro"
     depends_on:
       - tempo
     healthcheck:

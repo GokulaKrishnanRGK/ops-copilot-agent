@@ -1,0 +1,104 @@
+{{- if .Values.loki.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loki
+spec:
+  selector:
+    app.kubernetes.io/component: loki
+  ports:
+    - name: http
+      port: {{ .Values.loki.service.port }}
+      targetPort: http
+---
+{{- end }}
+{{- if .Values.tempo.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tempo
+spec:
+  selector:
+    app.kubernetes.io/component: tempo
+  ports:
+    - name: query
+      port: {{ .Values.tempo.service.queryPort }}
+      targetPort: query
+    - name: otlp-grpc
+      port: {{ .Values.tempo.service.otlpGrpcPort }}
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: {{ .Values.tempo.service.otlpHttpPort }}
+      targetPort: otlp-http
+---
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+spec:
+  selector:
+    app.kubernetes.io/component: prometheus
+  ports:
+    - name: http
+      port: {{ .Values.prometheus.service.port }}
+      targetPort: http
+---
+{{- end }}
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  selector:
+    app.kubernetes.io/component: grafana
+  ports:
+    - name: http
+      port: {{ .Values.grafana.service.port }}
+      targetPort: http
+---
+{{- end }}
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: otel-collector
+spec:
+  selector:
+    app.kubernetes.io/component: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: {{ .Values.otelCollector.service.otlpGrpcPort }}
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: {{ .Values.otelCollector.service.otlpHttpPort }}
+      targetPort: otlp-http
+    - name: prom
+      port: {{ .Values.otelCollector.service.prometheusPort }}
+      targetPort: prom
+    - name: health
+      port: {{ .Values.otelCollector.service.healthPort }}
+      targetPort: health
+{{- end }}

@@ -1,0 +1,17 @@
+loki:
+  storage:
+    type: emptyDir
+
+tempo:
+  storage:
+    type: emptyDir
+
+grafana:
+  ingress:
+    enabled: false
+  storage:
+    type: emptyDir
+
+prometheus:
+  storage:
+    type: emptyDir

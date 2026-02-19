@@ -2,6 +2,8 @@
 {{- $apiImageRepo := coalesce .Values.terraform.helmValues.images.apiRepository .Values.images.apiRepository -}}
 {{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
 {{- $toolServerUrl := printf "http://%s:%v/mcp" (include "opscopilot.toolServerServiceName" .) (.Values.toolServer.service.port | int) -}}
+{{- $ecrPullSecret := .Values.artifacts.ecr.imagePullSecretName -}}
+{{- $pythonRegistryUrl := coalesce .Values.artifacts.pythonPackageRegistry.indexUrl .Values.terraform.helmValues.artifacts.pythonPackageRegistryUrl "" -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,9 +24,14 @@ spec:
         {{- include "opscopilot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
     spec:
-      {{- if .Values.imagePullSecrets }}
+      {{- if or .Values.imagePullSecrets $ecrPullSecret }}
       imagePullSecrets:
-        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+        {{- with .Values.imagePullSecrets }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ecrPullSecret }}
+        - name: {{ $ecrPullSecret | quote }}
+        {{- end }}
       {{- end }}
       containers:
         - name: api
@@ -70,6 +77,17 @@ spec:
             {{- if .Values.terraform.helmValues.api.env.opensearchIndex }}
             - name: OPENSEARCH_INDEX
               value: {{ .Values.terraform.helmValues.api.env.opensearchIndex | quote }}
+            {{- end }}
+            {{- if and .Values.artifacts.pythonPackageRegistry.enabled .Values.artifacts.pythonPackageRegistry.injectToApi $pythonRegistryUrl }}
+            - name: PIP_INDEX_URL
+              value: {{ $pythonRegistryUrl | quote }}
+            {{- end }}
+            {{- if and .Values.artifacts.pythonPackageRegistry.enabled .Values.artifacts.pythonPackageRegistry.injectToApi .Values.artifacts.pythonPackageRegistry.auth.secretName }}
+            - name: CODEARTIFACT_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifacts.pythonPackageRegistry.auth.secretName | quote }}
+                  key: {{ .Values.artifacts.pythonPackageRegistry.auth.tokenKey | quote }}
             {{- end }}
             {{- range $key, $value := .Values.api.env }}
             - name: {{ $key }}
