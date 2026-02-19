@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"os"
+	"sort"
 
 	"github.com/ops-copilot/tool-server/internal/k8s"
 	"github.com/ops-copilot/tool-server/internal/logging"
@@ -12,6 +14,7 @@ type toolHandler func(ctx context.Context, client *kubernetes.Clientset, args ma
 
 var toolRegistry = map[string]toolHandler{
 	"k8s.list_pods":           listPodsHandler,
+	"k8s.list_namespaces":     listNamespacesHandler,
 	"k8s.describe_pod":        describePodHandler,
 	"k8s.get_pod_events":      podEventsHandler,
 	"k8s.get_pod_logs":        podLogsHandler,
@@ -35,6 +38,48 @@ func listPodsHandler(ctx context.Context, client *kubernetes.Clientset, args map
 	return map[string]any{
 		"tool_name": "k8s.list_pods",
 		"items":     pods,
+	}, nil
+}
+
+func listNamespacesHandler(ctx context.Context, client *kubernetes.Clientset, args map[string]any) (any, *toolError) {
+	allowedMap := k8s.ParseAllowlist(os.Getenv("K8S_ALLOWED_NAMESPACES"))
+	if len(allowedMap) == 0 {
+		errResp := toolError{
+			ErrorType: "permission_denied",
+			Message:   "no allowed namespaces configured",
+			ToolName:  "k8s.list_namespaces",
+			Duration:  0,
+		}
+		return nil, &errResp
+	}
+
+	allowedNamespaces := make([]string, 0, len(allowedMap))
+	for namespace := range allowedMap {
+		allowedNamespaces = append(allowedNamespaces, namespace)
+	}
+	sort.Strings(allowedNamespaces)
+
+	candidates := allowedNamespaces
+	clusterNamespaces, err := k8s.ListNamespaces(ctx, client)
+	if err == nil {
+		clusterSet := make(map[string]struct{}, len(clusterNamespaces))
+		for _, namespace := range clusterNamespaces {
+			clusterSet[namespace] = struct{}{}
+		}
+		candidates = make([]string, 0, len(allowedNamespaces))
+		for _, namespace := range allowedNamespaces {
+			if _, ok := clusterSet[namespace]; ok {
+				candidates = append(candidates, namespace)
+			}
+		}
+	}
+
+	accessible := k8s.FilterAccessibleNamespaces(ctx, client, candidates)
+	return map[string]any{
+		"tool_name":           "k8s.list_namespaces",
+		"allowed_namespaces":  allowedNamespaces,
+		"matching_namespaces": accessible,
+		"items":               accessible,
 	}, nil
 }
 

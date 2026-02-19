@@ -10,6 +10,15 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
+func requiresNamespace(toolName string) bool {
+	switch toolName {
+	case "k8s.list_namespaces":
+		return false
+	default:
+		return true
+	}
+}
+
 func executeTool(req toolRequest) toolResponse {
 	ctx := context.Background()
 	traceparent, ok := req.Args["__traceparent"].(string)
@@ -55,7 +64,7 @@ func executeTool(req toolRequest) toolResponse {
 		}
 	}
 	namespace, _ := req.Args["namespace"].(string)
-	if namespace == "" {
+	if requiresNamespace(req.ToolName) && namespace == "" {
 		logging.Error(
 			ctx,
 			"tool execute error",
@@ -73,7 +82,7 @@ func executeTool(req toolRequest) toolResponse {
 		}
 	}
 	allowed := k8s.ParseAllowlist(os.Getenv("K8S_ALLOWED_NAMESPACES"))
-	if !k8s.IsAllowed(allowed, namespace) {
+	if requiresNamespace(req.ToolName) && !k8s.IsAllowed(allowed, namespace) {
 		logging.Error(
 			ctx,
 			"tool execute error",

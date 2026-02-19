@@ -55,6 +55,7 @@ func TestMCPToolsList(t *testing.T) {
 	toolsRaw, ok := decoded.Result["tools"].([]any)
 	require.True(ok)
 	found := false
+	foundNamespaces := false
 	for _, item := range toolsRaw {
 		tool, ok := item.(map[string]any)
 		if !ok {
@@ -62,10 +63,13 @@ func TestMCPToolsList(t *testing.T) {
 		}
 		if tool["name"] == "k8s.list_pods" {
 			found = true
-			break
+		}
+		if tool["name"] == "k8s.list_namespaces" {
+			foundNamespaces = true
 		}
 	}
 	require.True(found)
+	require.True(foundNamespaces)
 }
 
 func TestMCPListPods(t *testing.T) {

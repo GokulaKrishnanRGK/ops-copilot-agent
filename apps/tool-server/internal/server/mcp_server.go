@@ -16,6 +16,10 @@ type listPodsInput struct {
 	LabelSelector string `json:"label_selector"`
 }
 
+type listNamespacesInput struct {
+	InstrumentationInput
+}
+
 type describePodInput struct {
 	InstrumentationInput
 	Namespace string `json:"namespace"`
@@ -85,6 +89,15 @@ func registerMCPTools(server *mcp.Server) {
 			}
 			addInternalArgs(payload, input.InstrumentationInput)
 			resp := runToolRequest(ctx, "k8s.list_pods", payload)
+			return nil, resp, nil
+		}),
+	)
+
+	mcp.AddTool(server, &mcp.Tool{Name: "k8s.list_namespaces", Description: "List accessible namespaces restricted by allowed namespaces"},
+		mcp.ToolHandlerFor[listNamespacesInput, toolResponse](func(ctx context.Context, request *mcp.CallToolRequest, input listNamespacesInput) (*mcp.CallToolResult, toolResponse, error) {
+			payload := map[string]any{}
+			addInternalArgs(payload, input.InstrumentationInput)
+			resp := runToolRequest(ctx, "k8s.list_namespaces", payload)
 			return nil, resp, nil
 		}),
 	)
