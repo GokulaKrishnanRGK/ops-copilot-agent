@@ -1,0 +1,88 @@
+{{- if .Values.migrations.enabled }}
+{{- $apiImageRepo := coalesce .Values.migrations.image.repository .Values.terraform.helmValues.images.apiRepository .Values.images.apiRepository -}}
+{{- $imageTag := coalesce .Values.migrations.image.tag .Values.global.imageTag -}}
+{{- $imagePullPolicy := coalesce .Values.migrations.image.pullPolicy .Values.images.pullPolicy -}}
+{{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
+{{- $ecrPullSecret := .Values.artifacts.ecr.imagePullSecretName -}}
+{{- $pythonRegistryUrl := coalesce .Values.artifacts.pythonPackageRegistry.indexUrl .Values.terraform.helmValues.artifacts.pythonPackageRegistryUrl "" -}}
+{{- $dbSecretName := "" -}}
+{{- if and .Values.migrations.database.useTerraformDatabaseSecret .Values.terraform.helmSecretRefs.api.database.secretName }}
+{{- $dbSecretName = .Values.terraform.helmSecretRefs.api.database.secretName -}}
+{{- else if .Values.migrations.database.secretName }}
+{{- $dbSecretName = .Values.migrations.database.secretName -}}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "opscopilot.fullname" . }}-db-migrate
+  namespace: {{ include "opscopilot.namespace" . }}
+  labels:
+    {{- include "opscopilot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-migrate
+  {{- if .Values.migrations.hook.enabled }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": {{ .Values.migrations.hook.deletePolicy | quote }}
+    "helm.sh/hook-weight": {{ .Values.migrations.hook.weight | quote }}
+  {{- end }}
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "opscopilot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: db-migrate
+    spec:
+      restartPolicy: OnFailure
+      {{- if or .Values.imagePullSecrets $ecrPullSecret }}
+      imagePullSecrets:
+        {{- with .Values.imagePullSecrets }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ecrPullSecret }}
+        - name: {{ $ecrPullSecret | quote }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: db-migrate
+          image: "{{ $apiImageRepo }}:{{ $imageTag }}"
+          imagePullPolicy: {{ $imagePullPolicy }}
+          command:
+            {{- toYaml .Values.migrations.command | nindent 12 }}
+          env:
+            - name: LOG_LEVEL
+              value: {{ .Values.global.logLevel | quote }}
+            - name: AWS_REGION
+              value: {{ $awsRegion | quote }}
+            {{- if $dbSecretName }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $dbSecretName | quote }}
+                  key: {{ .Values.migrations.database.secretKey | quote }}
+            {{- end }}
+            {{- if and .Values.artifacts.pythonPackageRegistry.enabled .Values.artifacts.pythonPackageRegistry.injectToMigrations $pythonRegistryUrl }}
+            - name: PIP_INDEX_URL
+              value: {{ $pythonRegistryUrl | quote }}
+            {{- end }}
+            {{- if and .Values.artifacts.pythonPackageRegistry.enabled .Values.artifacts.pythonPackageRegistry.injectToMigrations .Values.artifacts.pythonPackageRegistry.auth.secretName }}
+            - name: CODEARTIFACT_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.artifacts.pythonPackageRegistry.auth.secretName | quote }}
+                  key: {{ .Values.artifacts.pythonPackageRegistry.auth.tokenKey | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.migrations.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $ref := .Values.migrations.secretEnv }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secretName | quote }}
+                  key: {{ $ref.secretKey | quote }}
+            {{- end }}
+{{- end }}
