@@ -66,9 +66,9 @@ cleanup() {
   fi
   docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" down
   rm -f "$kube_tmp"
-#  if kind get clusters | grep -q "^${cluster_name}$"; then
-#    kind delete cluster --name "${cluster_name}"
-#  fi
+  if kind get clusters | grep -q "^${cluster_name}$"; then
+    kind delete cluster --name "${cluster_name}"
+  fi
 }
 trap cleanup EXIT
 

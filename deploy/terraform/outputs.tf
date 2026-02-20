@@ -48,11 +48,48 @@ output "artifacts" {
   }
 }
 
+output "eks" {
+  description = "EKS contract outputs."
+  value = {
+    cluster_name      = module.eks.cluster_name
+    cluster_arn       = module.eks.cluster_arn
+    cluster_endpoint  = module.eks.cluster_endpoint
+    cluster_version   = module.eks.cluster_version
+    cluster_ca_data   = module.eks.cluster_ca_data
+    oidc_provider_arn = module.eks.oidc_provider_arn
+    oidc_issuer_url   = module.eks.oidc_issuer_url
+    node_group_name   = module.eks.node_group_name
+  }
+}
+
+output "controllers" {
+  description = "Controller IRSA role contract outputs."
+  value = {
+    enabled = module.controllers.enabled
+    external_dns = {
+      role_arn             = module.controllers.external_dns_role_arn
+      role_name            = module.controllers.external_dns_role_name
+      namespace            = var.external_dns_namespace
+      service_account_name = var.external_dns_service_account_name
+    }
+    aws_load_balancer_controller = {
+      role_arn             = module.controllers.aws_load_balancer_controller_role_arn
+      role_name            = module.controllers.aws_load_balancer_controller_role_name
+      namespace            = var.aws_load_balancer_controller_namespace
+      service_account_name = var.aws_load_balancer_controller_service_account_name
+    }
+  }
+}
+
 output "helm_values" {
   description = "Normalized non-sensitive values contract for Helm consumption."
   value = {
     global = {
       awsRegion = var.aws_region
+    }
+    eks = {
+      clusterName = module.eks.cluster_name
+      vpcId       = module.network.vpc_id
     }
     images = {
       apiRepository        = module.artifacts.ecr_repository_urls.api
@@ -85,6 +122,14 @@ output "helm_values" {
         tls = {
           certificateArn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
         }
+      }
+    }
+    controllers = {
+      externalDns = {
+        roleArn = module.controllers.external_dns_role_arn
+      }
+      awsLoadBalancerController = {
+        roleArn = module.controllers.aws_load_balancer_controller_role_arn
       }
     }
   }
