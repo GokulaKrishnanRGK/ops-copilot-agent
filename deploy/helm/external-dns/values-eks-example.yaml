@@ -1,0 +1,26 @@
+serviceAccount:
+  create: true
+  name: external-dns
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::<account-id>:role/opscopilot-external-dns"
+
+provider:
+  name: aws
+  domainFilters:
+    - "example.com"
+  zoneType: public
+
+registry:
+  type: txt
+  txtOwnerId: "opscopilot-dev"
+  txtPrefix: "external-dns-"
+
+policy: upsert-only
+interval: "1m"
+logLevel: info
+logFormat: json
+
+terraform:
+  outputContractVersion: "v1"
+  dnsContract:
+    route53_hosted_zone_id: "Z123456ABCDEFG"
