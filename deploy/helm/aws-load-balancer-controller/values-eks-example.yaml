@@ -1,0 +1,19 @@
+clusterName: "opscopilot-dev"
+region: "us-east-1"
+vpcId: "vpc-xxxxxxxx"
+
+serviceAccount:
+  create: true
+  name: aws-load-balancer-controller
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::<account-id>:role/opscopilot-aws-load-balancer-controller"
+
+ingressClass: alb
+
+enableShield: false
+enableWaf: false
+enableWafv2: false
+
+logLevel: info
+
+resources: {}
