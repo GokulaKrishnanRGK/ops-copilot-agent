@@ -1,5 +1,5 @@
 locals {
-  enabled          = var.create && var.oidc_provider_arn != "" && var.oidc_provider_url != ""
+  enabled          = var.create
   oidc_provider_id = replace(var.oidc_provider_url, "https://", "")
 
   external_dns_role_name = "${var.name_prefix}-external-dns"

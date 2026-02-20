@@ -4,6 +4,12 @@ data "tls_certificate" "oidc" {
 
 locals {
   node_group_name = "${var.cluster_name}-default"
+  public_subnet_id_map = {
+    for idx, subnet_id in var.public_subnet_ids : tostring(idx) => subnet_id
+  }
+  private_subnet_id_map = {
+    for idx, subnet_id in var.private_subnet_ids : tostring(idx) => subnet_id
+  }
 }
 
 resource "aws_iam_role" "cluster" {
@@ -130,7 +136,7 @@ resource "aws_iam_openid_connect_provider" "this" {
 }
 
 resource "aws_ec2_tag" "public_cluster_tag" {
-  for_each = toset(var.public_subnet_ids)
+  for_each = local.public_subnet_id_map
 
   resource_id = each.value
   key         = "kubernetes.io/cluster/${var.cluster_name}"
@@ -138,7 +144,7 @@ resource "aws_ec2_tag" "public_cluster_tag" {
 }
 
 resource "aws_ec2_tag" "public_elb_tag" {
-  for_each = toset(var.public_subnet_ids)
+  for_each = local.public_subnet_id_map
 
   resource_id = each.value
   key         = "kubernetes.io/role/elb"
@@ -146,7 +152,7 @@ resource "aws_ec2_tag" "public_elb_tag" {
 }
 
 resource "aws_ec2_tag" "private_cluster_tag" {
-  for_each = toset(var.private_subnet_ids)
+  for_each = local.private_subnet_id_map
 
   resource_id = each.value
   key         = "kubernetes.io/cluster/${var.cluster_name}"
@@ -154,7 +160,7 @@ resource "aws_ec2_tag" "private_cluster_tag" {
 }
 
 resource "aws_ec2_tag" "private_internal_elb_tag" {
-  for_each = toset(var.private_subnet_ids)
+  for_each = local.private_subnet_id_map
 
   resource_id = each.value
   key         = "kubernetes.io/role/internal-elb"

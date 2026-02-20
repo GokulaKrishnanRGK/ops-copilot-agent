@@ -20,6 +20,11 @@ tf_output_json="$(
   bash "${repo_root}/scripts/terraform.sh" output
 )"
 
+if ! printf "%s" "${tf_output_json}" | jq -e . >/dev/null 2>&1; then
+  echo "terraform output did not return valid JSON; run 'make tf-output' and resolve errors first." >&2
+  exit 1
+fi
+
 json_get() {
   local expr="$1"
   printf "%s" "${tf_output_json}" | jq -r "${expr} // empty"

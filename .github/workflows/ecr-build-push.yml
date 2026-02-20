@@ -1,0 +1,103 @@
+name: ECR Build and Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to publish"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPO_API: ${{ secrets.ECR_REPO_API }}
+  ECR_REPO_WEB: ${{ secrets.ECR_REPO_WEB }}
+  ECR_REPO_TOOL_SERVER: ${{ secrets.ECR_REPO_TOOL_SERVER }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          input_tag="${{ github.event.inputs.image_tag }}"
+          if [ -n "${input_tag}" ]; then
+            echo "value=${input_tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials (OIDC role)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (static keys)
+        if: ${{ secrets.AWS_ROLE_TO_ASSUME == '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${AWS_REGION}" ] || (echo "Missing secret: AWS_REGION" && exit 1)
+          [ -n "${ECR_REPO_API}" ] || (echo "Missing secret: ECR_REPO_API" && exit 1)
+          [ -n "${ECR_REPO_WEB}" ] || (echo "Missing secret: ECR_REPO_WEB" && exit 1)
+          [ -n "${ECR_REPO_TOOL_SERVER}" ] || (echo "Missing secret: ECR_REPO_TOOL_SERVER" && exit 1)
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.ECR_REPO_API }}:${{ steps.tag.outputs.value }}
+
+      - name: Build and push Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.ECR_REPO_WEB }}:${{ steps.tag.outputs.value }}
+
+      - name: Build and push Tool Server image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/tool-server
+          file: apps/tool-server/Dockerfile
+          push: true
+          tags: ${{ env.ECR_REPO_TOOL_SERVER }}:${{ steps.tag.outputs.value }}
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "## Published Image Tag"
+            echo "\`${{ steps.tag.outputs.value }}\`"
+            echo
+            echo "## Images"
+            echo "- \`${ECR_REPO_API}:${{ steps.tag.outputs.value }}\`"
+            echo "- \`${ECR_REPO_WEB}:${{ steps.tag.outputs.value }}\`"
+            echo "- \`${ECR_REPO_TOOL_SERVER}:${{ steps.tag.outputs.value }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

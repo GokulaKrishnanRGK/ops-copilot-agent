@@ -113,7 +113,7 @@ case "${action}" in
     fi
     ;;
   output)
-    run_init
+    run_init >/dev/null
     terraform output -json
     ;;
   fmt)

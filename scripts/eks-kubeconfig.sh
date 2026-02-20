@@ -26,6 +26,10 @@ if [ -z "${cluster_name}" ]; then
     TF_STATE_KEY="${tf_state_key}" \
     bash "${repo_root}/scripts/terraform.sh" output
   )"
+  if ! printf "%s" "${tf_output_json}" | jq -e . >/dev/null 2>&1; then
+    echo "terraform output did not return valid JSON; run 'make tf-output' and resolve errors first." >&2
+    exit 1
+  fi
   cluster_name="$(printf "%s" "${tf_output_json}" | jq -r '.eks.value.cluster_name // empty')"
 fi
 
