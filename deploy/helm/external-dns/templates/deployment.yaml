@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "externaldns.fullname" . }}
+  namespace: {{ include "externaldns.namespace" . }}
+  labels:
+    {{- include "externaldns.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "externaldns.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "externaldns.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "externaldns.serviceAccountName" . }}
+      containers:
+        - name: external-dns
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --provider={{ .Values.provider.name }}
+            {{- if .Values.sources.ingress }}
+            - --source=ingress
+            {{- end }}
+            - --registry={{ .Values.registry.type }}
+            - --txt-owner-id={{ .Values.registry.txtOwnerId }}
+            - --txt-prefix={{ .Values.registry.txtPrefix }}
+            - --policy={{ .Values.policy }}
+            - --interval={{ .Values.interval }}
+            - --aws-zone-type={{ .Values.provider.zoneType }}
+            - --log-level={{ .Values.logLevel }}
+            - --log-format={{ .Values.logFormat }}
+            {{- range .Values.provider.domainFilters }}
+            - --domain-filter={{ . }}
+            {{- end }}
+            {{- if .Values.terraform.dnsContract.route53_hosted_zone_id }}
+            - --zone-id-filter={{ .Values.terraform.dnsContract.route53_hosted_zone_id }}
+            {{- end }}
+          env:
+            {{- toYaml .Values.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
