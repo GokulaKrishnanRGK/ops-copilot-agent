@@ -44,6 +44,66 @@ variable "network_az_count" {
   }
 }
 
+variable "eks_cluster_name" {
+  description = "EKS cluster name. Defaults to <project>-<environment>-eks when empty."
+  type        = string
+  default     = ""
+}
+
+variable "eks_kubernetes_version" {
+  description = "Kubernetes version for EKS."
+  type        = string
+  default     = "1.32"
+}
+
+variable "eks_node_instance_types" {
+  description = "Managed node group instance types."
+  type        = list(string)
+  default     = ["t3.small"]
+}
+
+variable "eks_node_desired_size" {
+  description = "Desired node count for the default managed node group."
+  type        = number
+  default     = 1
+}
+
+variable "eks_node_min_size" {
+  description = "Minimum node count for the default managed node group."
+  type        = number
+  default     = 1
+}
+
+variable "eks_node_max_size" {
+  description = "Maximum node count for the default managed node group."
+  type        = number
+  default     = 2
+}
+
+variable "eks_node_disk_size" {
+  description = "Node root disk size (GiB) for the default managed node group."
+  type        = number
+  default     = 20
+}
+
+variable "eks_endpoint_public_access" {
+  description = "Whether EKS API endpoint is publicly reachable."
+  type        = bool
+  default     = true
+}
+
+variable "eks_endpoint_private_access" {
+  description = "Whether EKS API endpoint is privately reachable."
+  type        = bool
+  default     = false
+}
+
+variable "eks_public_access_cidrs" {
+  description = "CIDRs allowed for public EKS API access."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "opensearch_index_name" {
   description = "Default OpenSearch index name consumed by application runtime."
   type        = string
@@ -84,4 +144,46 @@ variable "acm_certificate_arn" {
   description = "ACM certificate ARN for ingress TLS termination."
   type        = string
   default     = ""
+}
+
+variable "controllers_create_irsa_roles" {
+  description = "Create IRSA IAM roles/policies for cluster controllers."
+  type        = bool
+  default     = true
+}
+
+variable "eks_oidc_provider_arn" {
+  description = "Deprecated: previously used for manual IRSA setup. Ignored when Terraform manages EKS."
+  type        = string
+  default     = ""
+}
+
+variable "eks_oidc_provider_url" {
+  description = "Deprecated: previously used for manual IRSA setup. Ignored when Terraform manages EKS."
+  type        = string
+  default     = ""
+}
+
+variable "external_dns_namespace" {
+  description = "Namespace for ExternalDNS service account."
+  type        = string
+  default     = "external-dns"
+}
+
+variable "external_dns_service_account_name" {
+  description = "Service account name for ExternalDNS."
+  type        = string
+  default     = "external-dns"
+}
+
+variable "aws_load_balancer_controller_namespace" {
+  description = "Namespace for AWS Load Balancer Controller service account."
+  type        = string
+  default     = "kube-system"
+}
+
+variable "aws_load_balancer_controller_service_account_name" {
+  description = "Service account name for AWS Load Balancer Controller."
+  type        = string
+  default     = "aws-load-balancer-controller"
 }

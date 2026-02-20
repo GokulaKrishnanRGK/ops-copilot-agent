@@ -4,9 +4,25 @@ project_name       = "ops-copilot"
 environment        = "dev"
 network_vpc_cidr   = "10.42.0.0/16"
 network_az_count   = 2
+eks_cluster_name = "ops-copilot-dev-eks"
+eks_kubernetes_version = "1.32"
+eks_node_instance_types = ["t3.small"]
+eks_node_desired_size = 1
+eks_node_min_size = 1
+eks_node_max_size = 2
+eks_node_disk_size = 20
+eks_endpoint_public_access = true
+eks_endpoint_private_access = false
+eks_public_access_cidrs = ["0.0.0.0/0"]
 opensearch_index_name = "opscopilot-docs"
 artifacts_create_python_package_registry = false
 artifacts_ecr_scan_on_push = false
+controllers_create_irsa_roles = true
+
+external_dns_namespace = "external-dns"
+external_dns_service_account_name = "external-dns"
+aws_load_balancer_controller_namespace = "kube-system"
+aws_load_balancer_controller_service_account_name = "aws-load-balancer-controller"
 
 # private values: do not commit your real domain/certificate metadata
 ingress_domain_name    = "your-private-domain.example"

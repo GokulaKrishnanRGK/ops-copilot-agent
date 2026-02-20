@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-observability-up helm-observability-down rag-ingest run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -111,11 +111,36 @@ observability-up:
 observability-down:
 	docker compose --env-file .env -f deploy/compose/observability.yml down
 
+helm-app-up:
+	helm upgrade --install $${HELM_APP_RELEASE_NAME:-opscopilot} $${HELM_APP_CHART_PATH:-deploy/helm/opscopilot} -n $${HELM_APP_NAMESPACE:-opscopilot} --create-namespace -f $${HELM_APP_VALUES_FILE:-deploy/helm/opscopilot/values-dev.yaml}
+
+helm-app-down:
+	helm uninstall $${HELM_APP_RELEASE_NAME:-opscopilot} -n $${HELM_APP_NAMESPACE:-opscopilot} || true
+
 helm-observability-up:
 	helm upgrade --install $${HELM_OBSERVABILITY_RELEASE_NAME:-opscopilot-observability} deploy/helm/observability -n $${HELM_LOCAL_NAMESPACE:-opscopilot-local} --create-namespace
 
 helm-observability-down:
 	helm uninstall $${HELM_OBSERVABILITY_RELEASE_NAME:-opscopilot-observability} -n $${HELM_LOCAL_NAMESPACE:-opscopilot-local} || true
+
+helm-controller-values-generate:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" HELM_AWSLBC_CLUSTER_NAME="$${HELM_AWSLBC_CLUSTER_NAME:-}" HELM_EXTERNALDNS_TXT_OWNER_ID="$${HELM_EXTERNALDNS_TXT_OWNER_ID:-}" bash scripts/render-controller-values.sh
+
+helm-externaldns-up:
+	@if [ -z "$${HELM_EXTERNALDNS_VALUES_FILE:-}" ]; then $(MAKE) helm-controller-values-generate; fi
+	helm upgrade --install $${HELM_EXTERNALDNS_RELEASE_NAME:-opscopilot-external-dns} deploy/helm/external-dns -n $${HELM_EXTERNALDNS_NAMESPACE:-external-dns} --create-namespace -f $${HELM_EXTERNALDNS_VALUES_FILE:-deploy/helm/external-dns/values-eks.generated.yaml}
+
+helm-externaldns-down:
+	helm uninstall $${HELM_EXTERNALDNS_RELEASE_NAME:-opscopilot-external-dns} -n $${HELM_EXTERNALDNS_NAMESPACE:-external-dns} || true
+
+helm-awslbc-up:
+	helm repo add eks https://aws.github.io/eks-charts || true
+	helm repo update
+	@if [ -z "$${HELM_AWSLBC_VALUES_FILE:-}" ]; then $(MAKE) helm-controller-values-generate; fi
+	helm upgrade --install $${HELM_AWSLBC_RELEASE_NAME:-aws-load-balancer-controller} eks/aws-load-balancer-controller -n $${HELM_AWSLBC_NAMESPACE:-kube-system} --create-namespace -f $${HELM_AWSLBC_VALUES_FILE:-deploy/helm/aws-load-balancer-controller/values-eks.generated.yaml}
+
+helm-awslbc-down:
+	helm uninstall $${HELM_AWSLBC_RELEASE_NAME:-aws-load-balancer-controller} -n $${HELM_AWSLBC_NAMESPACE:-kube-system} || true
 
 rag-ingest:
 	opscopilot-rag-ingest --root packages/rag/sample_docs --extensions .md,.txt
@@ -137,6 +162,9 @@ kind-kubeconfig:
 
 kind-seed:
 	KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" bash scripts/seed-kind-workloads.sh
+
+eks-kubeconfig:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" EKS_CLUSTER_NAME="$${EKS_CLUSTER_NAME:-}" EKS_AWS_REGION="$${EKS_AWS_REGION:-}" AWS_REGION="$${AWS_REGION:-}" AWS_PROFILE="$${AWS_PROFILE:-}" KUBECONFIG_PATH="$${KUBECONFIG_PATH:-}" bash scripts/eks-kubeconfig.sh
 
 docker-build-api:
 	docker build -f apps/api/Dockerfile -t $(API_IMAGE_REPOSITORY):$(IMAGE_TAG) .

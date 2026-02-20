@@ -13,14 +13,18 @@ This directory defines the Infrastructure-as-Code baseline for cloud deployment.
   - `outputs.tf`: normalized outputs for deployment consumers.
 - Child modules:
   - `modules/network`
+  - `modules/eks`
   - `modules/rds`
   - `modules/opensearch`
   - `modules/artifacts`
+  - `modules/controllers`
 
 ## Implementation Plan
 
 - Provider constraints and module composition are defined in the root module.
 - Network, database, search, and artifact concerns are separated into child modules.
+- EKS cluster + managed node group + IRSA OIDC provider are managed via `modules/eks`.
+- Optional controller IRSA roles (AWS Load Balancer Controller and ExternalDNS) are managed via `modules/controllers` using OIDC outputs from `modules/eks`.
 - Outputs are normalized for downstream deployment tooling consumption.
 - Apply/destroy orchestration is expected to be wired via project Make targets/scripts.
 
