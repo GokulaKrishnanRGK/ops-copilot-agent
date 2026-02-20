@@ -108,7 +108,8 @@ resource "aws_opensearch_domain" "this" {
 }
 
 resource "aws_secretsmanager_secret" "username" {
-  name = local.username_secret_name
+  name                    = local.username_secret_name
+  recovery_window_in_days = 0
 
   tags = merge(var.tags, {
     Name = local.username_secret_name
@@ -121,7 +122,8 @@ resource "aws_secretsmanager_secret_version" "username" {
 }
 
 resource "aws_secretsmanager_secret" "password" {
-  name = local.password_secret_name
+  name                    = local.password_secret_name
+  recovery_window_in_days = 0
 
   tags = merge(var.tags, {
     Name = local.password_secret_name

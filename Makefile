@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -165,6 +165,14 @@ kind-seed:
 
 eks-kubeconfig:
 	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" EKS_CLUSTER_NAME="$${EKS_CLUSTER_NAME:-}" EKS_AWS_REGION="$${EKS_AWS_REGION:-}" AWS_REGION="$${AWS_REGION:-}" AWS_PROFILE="$${AWS_PROFILE:-}" KUBECONFIG_PATH="$${KUBECONFIG_PATH:-}" bash scripts/eks-kubeconfig.sh
+
+ecr-login:
+	@if [ -z "$${AWS_REGION:-}" ]; then echo "AWS_REGION is required"; exit 1; fi
+	@acct=$$(aws $${AWS_PROFILE:+--profile "$${AWS_PROFILE}"} sts get-caller-identity --query Account --output text) && \
+	aws ecr get-login-password --region "$${AWS_REGION}" $${AWS_PROFILE:+--profile "$${AWS_PROFILE}"} | docker login --username AWS --password-stdin "$${acct}.dkr.ecr.$${AWS_REGION}.amazonaws.com"
+
+ecr-build-push:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" IMAGE_TAG="$(IMAGE_TAG)" AWS_REGION="$${AWS_REGION:-}" AWS_PROFILE="$${AWS_PROFILE:-}" bash scripts/push-ecr-images.sh
 
 docker-build-api:
 	docker build -f apps/api/Dockerfile -t $(API_IMAGE_REPOSITORY):$(IMAGE_TAG) .
