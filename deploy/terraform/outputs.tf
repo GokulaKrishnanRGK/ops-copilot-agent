@@ -78,6 +78,12 @@ output "controllers" {
       namespace            = var.aws_load_balancer_controller_namespace
       service_account_name = var.aws_load_balancer_controller_service_account_name
     }
+    api = {
+      role_arn             = module.controllers.api_role_arn
+      role_name            = module.controllers.api_role_name
+      namespace            = var.api_namespace
+      service_account_name = var.api_service_account_name
+    }
   }
 }
 
@@ -130,6 +136,9 @@ output "helm_values" {
       }
       awsLoadBalancerController = {
         roleArn = module.controllers.aws_load_balancer_controller_role_arn
+      }
+      api = {
+        roleArn = module.controllers.api_role_arn
       }
     }
   }

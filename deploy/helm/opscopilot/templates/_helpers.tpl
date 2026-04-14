@@ -35,12 +35,24 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 {{- end -}}
 
-{{- define "opscopilot.serviceAccountName" -}}
+{{- define "opscopilot.toolServerServiceAccountName" -}}
 {{- if .Values.toolServer.serviceAccount.create -}}
 {{- if .Values.toolServer.serviceAccount.name -}}
 {{ .Values.toolServer.serviceAccount.name }}
 {{- else -}}
 {{ printf "%s-tool-server" (include "opscopilot.fullname" .) }}
+{{- end -}}
+{{- else -}}
+default
+{{- end -}}
+{{- end -}}
+
+{{- define "opscopilot.apiServiceAccountName" -}}
+{{- if .Values.api.serviceAccount.create -}}
+{{- if .Values.api.serviceAccount.name -}}
+{{ .Values.api.serviceAccount.name }}
+{{- else -}}
+{{ printf "%s-api" (include "opscopilot.fullname" .) }}
 {{- end -}}
 {{- else -}}
 default

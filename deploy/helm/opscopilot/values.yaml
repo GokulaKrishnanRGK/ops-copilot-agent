@@ -13,11 +13,15 @@ images:
 api:
   enabled: true
   replicaCount: 1
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
   service:
     type: ClusterIP
     port: 8000
   serviceAlias:
-    enabled: false
+    enabled: true
     name: "api"
   containerPort: 8000
   probes:
@@ -32,7 +36,11 @@ api:
       initialDelaySeconds: 5
       periodSeconds: 5
   resources: {}
-  env: {}
+  env:
+    API_LOG_FILE: "/tmp/opscopilot-api.log"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4318"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    OTEL_SERVICE_NAME: "ops-copilot-api"
   secretEnv: {}
   secretRefs: []
   secrets:
@@ -88,7 +96,12 @@ toolServer:
       - default
       - observability
   resources: {}
-  env: {}
+  env:
+    TOOL_SERVER_LOG_FILE: "/tmp/opscopilot-tool-server.log"
+    K8S_ALLOWED_NAMESPACES: "default,observability"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4318"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    OTEL_SERVICE_NAME: "ops-copilot-tool-server"
   secretEnv: {}
   secretRefs: []
 
@@ -181,6 +194,9 @@ terraform:
       domainName: ""
       tls:
         certificateArn: ""
+    controllers:
+      api:
+        roleArn: ""
   helmSecretRefs:
     api:
       database:

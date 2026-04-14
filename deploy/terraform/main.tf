@@ -78,4 +78,7 @@ module "controllers" {
 
   aws_load_balancer_controller_namespace            = var.aws_load_balancer_controller_namespace
   aws_load_balancer_controller_service_account_name = var.aws_load_balancer_controller_service_account_name
+
+  api_namespace            = var.api_namespace
+  api_service_account_name = var.api_service_account_name
 }

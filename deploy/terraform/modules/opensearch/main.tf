@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 resource "random_password" "master" {
   length  = 24
   special = true
@@ -18,11 +16,11 @@ resource "aws_security_group" "opensearch" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description     = "HTTPS from application security group."
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [var.security_group_id]
+    description = "HTTPS from VPC workloads (including EKS nodes/pods)."
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   egress {
@@ -94,9 +92,9 @@ resource "aws_opensearch_domain" "this" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = data.aws_caller_identity.current.arn
+          AWS = "*"
         }
-        Action   = "es:*"
+        Action   = "es:ESHttp*"
         Resource = "arn:aws:es:*:*:domain/${local.domain_name}/*"
       }
     ]

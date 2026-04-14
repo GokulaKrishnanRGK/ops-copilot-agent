@@ -22,3 +22,13 @@ output "aws_load_balancer_controller_role_name" {
   description = "IRSA role name for AWS Load Balancer Controller."
   value       = local.enabled ? aws_iam_role.awslbc[0].name : null
 }
+
+output "api_role_arn" {
+  description = "IRSA role ARN for API runtime."
+  value       = local.enabled ? aws_iam_role.api[0].arn : null
+}
+
+output "api_role_name" {
+  description = "IRSA role name for API runtime."
+  value       = local.enabled ? aws_iam_role.api[0].name : null
+}

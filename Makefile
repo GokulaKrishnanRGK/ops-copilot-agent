@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -111,8 +111,16 @@ observability-up:
 observability-down:
 	docker compose --env-file .env -f deploy/compose/observability.yml down
 
+helm-app-values-generate:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" IMAGE_TAG="$(IMAGE_TAG)" LOG_LEVEL="$${LOG_LEVEL:-INFO}" K8S_ALLOWED_NAMESPACES="$${K8S_ALLOWED_NAMESPACES:-default}" HELM_APP_VALUES_OUT="$${HELM_APP_VALUES_OUT:-}" bash scripts/render-app-values.sh
+
+eks-secrets-sync:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" HELM_APP_NAMESPACE="$${HELM_APP_NAMESPACE:-opscopilot}" AWS_REGION="$${AWS_REGION:-}" AWS_PROFILE="$${AWS_PROFILE:-}" bash scripts/sync-eks-secrets.sh
+
 helm-app-up:
-	helm upgrade --install $${HELM_APP_RELEASE_NAME:-opscopilot} $${HELM_APP_CHART_PATH:-deploy/helm/opscopilot} -n $${HELM_APP_NAMESPACE:-opscopilot} --create-namespace -f $${HELM_APP_VALUES_FILE:-deploy/helm/opscopilot/values-dev.yaml}
+	@if [ -z "$${HELM_APP_VALUES_FILE:-}" ]; then $(MAKE) helm-app-values-generate; fi
+	@if [ "$${HELM_SKIP_SECRET_SYNC:-0}" != "1" ]; then $(MAKE) eks-secrets-sync; fi
+	helm upgrade --install $${HELM_APP_RELEASE_NAME:-opscopilot} $${HELM_APP_CHART_PATH:-deploy/helm/opscopilot} -n $${HELM_APP_NAMESPACE:-opscopilot} --create-namespace --timeout $${HELM_APP_TIMEOUT:-20m} -f $${HELM_APP_VALUES_FILE:-deploy/helm/opscopilot/values-eks.generated.yaml}
 
 helm-app-down:
 	helm uninstall $${HELM_APP_RELEASE_NAME:-opscopilot} -n $${HELM_APP_NAMESPACE:-opscopilot} || true

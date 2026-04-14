@@ -4,6 +4,7 @@ locals {
 
   external_dns_role_name = "${var.name_prefix}-external-dns"
   awslbc_role_name       = "${var.name_prefix}-aws-lb-controller"
+  api_role_name          = "${var.name_prefix}-api"
 }
 
 data "aws_iam_policy_document" "external_dns_assume_role" {
@@ -55,6 +56,33 @@ data "aws_iam_policy_document" "awslbc_assume_role" {
       variable = "${local.oidc_provider_id}:sub"
       values = [
         "system:serviceaccount:${var.aws_load_balancer_controller_namespace}:${var.aws_load_balancer_controller_service_account_name}",
+      ]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "api_assume_role" {
+  count = local.enabled ? 1 : 0
+
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider_id}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider_id}:sub"
+      values = [
+        "system:serviceaccount:${var.api_namespace}:${var.api_service_account_name}",
       ]
     }
   }
@@ -152,6 +180,23 @@ data "aws_iam_policy_document" "awslbc_permissions" {
   }
 }
 
+data "aws_iam_policy_document" "api_permissions" {
+  count = local.enabled ? 1 : 0
+
+  statement {
+    sid = "BedrockRuntimeAccess"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream",
+      "bedrock:Converse",
+      "bedrock:ConverseStream",
+      "bedrock:ListFoundationModels",
+      "bedrock:GetFoundationModel",
+    ]
+    resources = ["*"]
+  }
+}
+
 resource "aws_iam_policy" "external_dns" {
   count       = local.enabled ? 1 : 0
   name        = "${local.external_dns_role_name}-policy"
@@ -165,6 +210,14 @@ resource "aws_iam_policy" "awslbc" {
   name        = "${local.awslbc_role_name}-policy"
   description = "Permissions for AWS Load Balancer Controller"
   policy      = data.aws_iam_policy_document.awslbc_permissions[0].json
+  tags        = var.tags
+}
+
+resource "aws_iam_policy" "api" {
+  count       = local.enabled ? 1 : 0
+  name        = "${local.api_role_name}-policy"
+  description = "Permissions for API service runtime calls"
+  policy      = data.aws_iam_policy_document.api_permissions[0].json
   tags        = var.tags
 }
 
@@ -182,6 +235,13 @@ resource "aws_iam_role" "awslbc" {
   tags               = var.tags
 }
 
+resource "aws_iam_role" "api" {
+  count              = local.enabled ? 1 : 0
+  name               = local.api_role_name
+  assume_role_policy = data.aws_iam_policy_document.api_assume_role[0].json
+  tags               = var.tags
+}
+
 resource "aws_iam_role_policy_attachment" "external_dns" {
   count      = local.enabled ? 1 : 0
   role       = aws_iam_role.external_dns[0].name
@@ -192,4 +252,10 @@ resource "aws_iam_role_policy_attachment" "awslbc" {
   count      = local.enabled ? 1 : 0
   role       = aws_iam_role.awslbc[0].name
   policy_arn = aws_iam_policy.awslbc[0].arn
+}
+
+resource "aws_iam_role_policy_attachment" "api" {
+  count      = local.enabled ? 1 : 0
+  role       = aws_iam_role.api[0].name
+  policy_arn = aws_iam_policy.api[0].arn
 }

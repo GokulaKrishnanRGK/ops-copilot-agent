@@ -1,4 +1,6 @@
 # codex control docs
+docs/
+plans/
 CODEX_WORKFLOW.md
 MILESTONES.md
 AGENTS.md
@@ -15,7 +17,7 @@ CONFIGURATION.md
 TESTING.md
 CONSTRAINTS.md
 VISION.md
-AGENT.md
+AGENTS.md
 ARCHITECTURE_OVERVIEW.md
 TECH_STACK.md
 REPO_STRUCTURE.md
@@ -246,6 +248,7 @@ web_modules/
 deploy/terraform/environments/dev.tfvars
 deploy/helm/external-dns/values-eks.generated.yaml
 deploy/helm/aws-load-balancer-controller/values-eks.generated.yaml
+deploy/helm/opscopilot/values-eks.generated.yaml
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -611,6 +614,7 @@ sketch
 *testfile
 *testfiles
 *testing
+!e2e-testing
 *testingdir
 *testingfile
 *testingfiles

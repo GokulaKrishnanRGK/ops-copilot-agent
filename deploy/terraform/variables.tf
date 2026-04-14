@@ -187,3 +187,15 @@ variable "aws_load_balancer_controller_service_account_name" {
   type        = string
   default     = "aws-load-balancer-controller"
 }
+
+variable "api_namespace" {
+  description = "Namespace for API service account."
+  type        = string
+  default     = "opscopilot"
+}
+
+variable "api_service_account_name" {
+  description = "Service account name for API deployment."
+  type        = string
+  default     = "api"
+}

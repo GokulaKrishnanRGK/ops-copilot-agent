@@ -49,7 +49,7 @@ grafana:
       storageClassName: ""
       size: 5Gi
   ingress:
-    enabled: false
+    enabled: true
     className: "alb"
     host: ""
     path: "/"

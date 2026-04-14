@@ -22,7 +22,7 @@ spec:
         {{- include "opscopilot.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: tool-server
     spec:
-      serviceAccountName: {{ include "opscopilot.serviceAccountName" . }}
+      serviceAccountName: {{ include "opscopilot.toolServerServiceAccountName" . }}
       {{- if or .Values.imagePullSecrets $ecrPullSecret }}
       imagePullSecrets:
         {{- with .Values.imagePullSecrets }}

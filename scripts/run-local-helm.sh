@@ -150,9 +150,6 @@ kubectl -n "${helm_namespace}" create secret generic opscopilot-api-secrets \
   --from-literal=DATABASE_URL="${database_url_local}" \
   --from-literal=OPENSEARCH_USERNAME="${OPENSEARCH_USERNAME:-admin}" \
   --from-literal=OPENSEARCH_PASSWORD="${OPENSEARCH_PASSWORD:-}" \
-  --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
-  --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
-  --from-literal=AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
   --from-literal=OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
@@ -198,15 +195,6 @@ api:
     OPENSEARCH_PASSWORD:
       secretName: "opscopilot-api-secrets"
       secretKey: "OPENSEARCH_PASSWORD"
-    AWS_ACCESS_KEY_ID:
-      secretName: "opscopilot-api-secrets"
-      secretKey: "AWS_ACCESS_KEY_ID"
-    AWS_SECRET_ACCESS_KEY:
-      secretName: "opscopilot-api-secrets"
-      secretKey: "AWS_SECRET_ACCESS_KEY"
-    AWS_SESSION_TOKEN:
-      secretName: "opscopilot-api-secrets"
-      secretKey: "AWS_SESSION_TOKEN"
     OPENAI_API_KEY:
       secretName: "opscopilot-api-secrets"
       secretKey: "OPENAI_API_KEY"

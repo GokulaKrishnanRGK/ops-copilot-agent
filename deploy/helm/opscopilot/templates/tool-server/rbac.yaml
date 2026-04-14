@@ -1,5 +1,7 @@
 {{- if and .Values.toolServer.enabled .Values.toolServer.rbac.create }}
 {{- range $ns := .Values.toolServer.rbac.allowedNamespaces }}
+{{- $nsObj := lookup "v1" "Namespace" "" $ns }}
+{{- if $nsObj }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -26,12 +28,13 @@ metadata:
     app.kubernetes.io/component: tool-server
 subjects:
   - kind: ServiceAccount
-    name: {{ include "opscopilot.serviceAccountName" $ }}
+    name: {{ include "opscopilot.toolServerServiceAccountName" $ }}
     namespace: {{ include "opscopilot.namespace" $ }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "opscopilot.fullname" $ }}-tool-server-readonly
 ---
+{{- end }}
 {{- end }}
 {{- end }}

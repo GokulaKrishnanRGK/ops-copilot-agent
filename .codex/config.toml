@@ -1,0 +1,53 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+sandbox_mode = "workspace-write"
+web_search = "live"
+persistent_instructions = "Follow AGENTS.md first. Preserve repo boundaries, observability, and configuration contracts."
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@latest"]
+startup_timeout_sec = 30
+
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+startup_timeout_sec = 30
+
+[mcp_servers.memory]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-memory"]
+startup_timeout_sec = 30
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["-y", "@playwright/mcp@latest", "--extension"]
+startup_timeout_sec = 30
+
+[mcp_servers.sequential-thinking]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+startup_timeout_sec = 30
+
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 6
+max_depth = 1
+
+[agents.planner]
+description = "Planning specialist for slice-sized work in this repo."
+config_file = "agents/planner.toml"
+
+[agents.code_reviewer]
+description = "Mixed-stack reviewer focused on regressions, contracts, and missing tests."
+config_file = "agents/code-reviewer.toml"
+
+[agents.security_reviewer]
+description = "Security reviewer for API, cloud, and secret-handling changes."
+config_file = "agents/security-reviewer.toml"
+
+[agents.docs_lookup]
+description = "Documentation verifier for current library and framework behavior."
+config_file = "agents/docs-lookup.toml"
