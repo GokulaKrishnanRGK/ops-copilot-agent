@@ -39,7 +39,6 @@ RUN apt-get update \
 COPY --from=builder /install /usr/local
 COPY packages/db/alembic /app/migrations/alembic
 COPY packages/db/alembic.ini /app/migrations/alembic.ini
-COPY packages/llm-gateway/src/opscopilot_llm_gateway/costs.json /app/config/costs.json
 
 EXPOSE 8000
 
