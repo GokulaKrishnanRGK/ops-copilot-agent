@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from importlib import import_module
 from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
@@ -31,12 +32,28 @@ def _validated_otlp_endpoint(raw_endpoint: str) -> str:
     return raw_endpoint.rstrip("/")
 
 
-def configure_telemetry(default_service_name: str = "ops-copilot") -> None:
+def _instrument_provider(module_name: str, class_name: str) -> None:
+    try:
+        module = import_module(module_name)
+        instrumentor = getattr(module, class_name)
+        instrumentor().instrument()
+    except Exception:
+        return
+
+
+def _instrument_openllmetry() -> None:
+    os.environ.setdefault("TRACELOOP_TRACE_CONTENT", "false")
+    _instrument_provider("opentelemetry.instrumentation.bedrock", "BedrockInstrumentor")
+    _instrument_provider("opentelemetry.instrumentation.openai_v2", "OpenAIInstrumentor")
+
+
+def configure_telemetry(service_name: str) -> None:
     global _configured
     if _configured:
         return
 
     if isinstance(trace.get_tracer_provider(), TracerProvider):
+        _instrument_openllmetry()
         _configured = True
         return
 
@@ -46,8 +63,8 @@ def configure_telemetry(default_service_name: str = "ops-copilot") -> None:
         return
     endpoint = _validated_otlp_endpoint(endpoint)
 
-    service_name = os.getenv("OTEL_SERVICE_NAME", default_service_name)
-    resource = Resource.create({"service.name": service_name})
+    resolved_service_name = os.getenv("OTEL_SERVICE_NAME", service_name)
+    resource = Resource.create({"service.name": resolved_service_name})
 
     tracer_provider = TracerProvider(resource=resource)
     trace_exporter = OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces")
@@ -59,4 +76,5 @@ def configure_telemetry(default_service_name: str = "ops-copilot") -> None:
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
+    _instrument_openllmetry()
     _configured = True

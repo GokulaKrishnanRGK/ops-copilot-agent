@@ -12,7 +12,7 @@ from opscopilot_observability import (
 
 
 def _configure_logging() -> None:
-    configure_telemetry(default_service_name="ops-copilot-agent-runtime")
+    configure_telemetry(service_name="ops-copilot-agent-runtime")
     configure_json_logging(
         service_name="agent-runtime",
         level=os.getenv("LOG_LEVEL", "INFO"),

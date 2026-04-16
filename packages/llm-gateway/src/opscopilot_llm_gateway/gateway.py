@@ -5,7 +5,6 @@ from opentelemetry import trace
 from opscopilot_llm_gateway.accounting import CostLedger, CostRecord
 from opscopilot_llm_gateway.budgets import BudgetEnforcer
 from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
-from opscopilot_llm_gateway.telemetry import build_span_attributes
 from opscopilot_llm_gateway.types import EmbeddingRequest, EmbeddingResponse, LlmRequest, LlmResponse
 
 
@@ -24,16 +23,13 @@ def run_gateway_call(
         else:
             response = provider.invoke_stream(request, on_delta)
         cost_usd = response.cost_usd
-        for key, value in build_span_attributes(
-            model_id=request.model_id,
-            agent_node=request.tags.agent_node,
-            tokens_input=response.tokens_input,
-            tokens_output=response.tokens_output,
-            cost_usd=cost_usd,
-            session_id=request.tags.session_id,
-            agent_run_id=request.tags.agent_run_id,
-        ).items():
-            span.set_attribute(key, value)
+        span.set_attribute("gen_ai.request.model", request.model_id)
+        span.set_attribute("gen_ai.usage.input_tokens", response.tokens_input)
+        span.set_attribute("gen_ai.usage.output_tokens", response.tokens_output)
+        span.set_attribute("agent_node", request.tags.agent_node)
+        span.set_attribute("cost_usd", cost_usd)
+        span.set_attribute("session_id", request.tags.session_id)
+        span.set_attribute("agent_run_id", request.tags.agent_run_id)
         span.set_attribute("latency_ms", response.latency_ms)
         if not budget.can_spend(cost_usd):
             raise RuntimeError("budget_exceeded")
@@ -63,16 +59,13 @@ def run_embedding_call(
         span.set_attribute("provider", "embedding")
         response = provider.embed(request)
         cost_usd = response.cost_usd
-        for key, value in build_span_attributes(
-            model_id=request.model_id,
-            agent_node=request.tags.agent_node,
-            tokens_input=response.tokens_input,
-            tokens_output=0,
-            cost_usd=cost_usd,
-            session_id=request.tags.session_id,
-            agent_run_id=request.tags.agent_run_id,
-        ).items():
-            span.set_attribute(key, value)
+        span.set_attribute("gen_ai.request.model", request.model_id)
+        span.set_attribute("gen_ai.usage.input_tokens", response.tokens_input)
+        span.set_attribute("gen_ai.usage.output_tokens", 0)
+        span.set_attribute("agent_node", request.tags.agent_node)
+        span.set_attribute("cost_usd", cost_usd)
+        span.set_attribute("session_id", request.tags.session_id)
+        span.set_attribute("agent_run_id", request.tags.agent_run_id)
         span.set_attribute("latency_ms", response.latency_ms)
         if not budget.can_spend(cost_usd):
             raise RuntimeError("budget_exceeded")
