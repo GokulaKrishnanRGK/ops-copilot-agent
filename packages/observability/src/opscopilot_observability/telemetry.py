@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from importlib import import_module
+from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
@@ -14,6 +16,105 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 _configured = False
+
+
+class MetricNames:
+    GEN_AI_CLIENT_TOKEN_USAGE = "gen_ai.client.token.usage"
+    GEN_AI_CLIENT_OPERATION_DURATION = "gen_ai.client.operation.duration"
+    GEN_AI_CLIENT_REQUESTS = "gen_ai.client.requests"
+    GEN_AI_SERVER_TIME_TO_FIRST_TOKEN = "gen_ai.server.time_to_first_token"
+    GEN_AI_USAGE_INPUT_TOKENS = "gen_ai.usage.input_tokens"
+    GEN_AI_USAGE_OUTPUT_TOKENS = "gen_ai.usage.output_tokens"
+    GEN_AI_REQUEST_MODEL = "gen_ai.request.model"
+
+
+class LangfuseAdapter(Protocol):
+    def score_current_trace(
+        self,
+        *,
+        name: str,
+        value: float,
+        comment: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        ...
+
+    def propagate_attributes(
+        self,
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> None:
+        ...
+
+    def flush(self) -> None:
+        ...
+
+
+@dataclass(frozen=True)
+class NoOpLangfuseAdapter:
+    def score_current_trace(
+        self,
+        *,
+        name: str,
+        value: float,
+        comment: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        return None
+
+    def propagate_attributes(
+        self,
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> None:
+        return None
+
+    def flush(self) -> None:
+        return None
+
+
+@dataclass(frozen=True)
+class HttpLangfuseAdapter:
+    client: Any
+
+    def score_current_trace(
+        self,
+        *,
+        name: str,
+        value: float,
+        comment: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self.client.score_current_trace(
+            name=name,
+            value=value,
+            comment=comment,
+            metadata=metadata,
+        )
+
+    def propagate_attributes(
+        self,
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+    ) -> None:
+        self.client.propagate_attributes(
+            session_id=session_id,
+            user_id=user_id,
+            metadata=metadata,
+            tags=tags,
+        )
+
+    def flush(self) -> None:
+        self.client.flush()
 
 
 def _validated_otlp_endpoint(raw_endpoint: str) -> str:
@@ -78,3 +179,27 @@ def configure_telemetry(service_name: str) -> None:
 
     _instrument_openllmetry()
     _configured = True
+
+
+def configure_langfuse(
+    public_key: str | None = None,
+    secret_key: str | None = None,
+    host: str | None = None,
+) -> LangfuseAdapter:
+    resolved_host = host or os.getenv("LANGFUSE_HOST")
+    if not resolved_host:
+        return NoOpLangfuseAdapter()
+
+    resolved_public_key = public_key or os.getenv("LANGFUSE_PUBLIC_KEY")
+    resolved_secret_key = secret_key or os.getenv("LANGFUSE_SECRET_KEY")
+    if not resolved_public_key or not resolved_secret_key:
+        return NoOpLangfuseAdapter()
+
+    module = import_module("langfuse")
+    client_class = getattr(module, "Langfuse")
+    client = client_class(
+        public_key=resolved_public_key,
+        secret_key=resolved_secret_key,
+        host=resolved_host,
+    )
+    return HttpLangfuseAdapter(client=client)

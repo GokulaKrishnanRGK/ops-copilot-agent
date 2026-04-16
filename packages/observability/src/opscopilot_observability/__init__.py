@@ -5,7 +5,14 @@ from .logging import (
     reset_log_context,
     set_log_context,
 )
-from .telemetry import configure_telemetry
+from .telemetry import (
+    HttpLangfuseAdapter,
+    LangfuseAdapter,
+    MetricNames,
+    NoOpLangfuseAdapter,
+    configure_langfuse,
+    configure_telemetry,
+)
 
 __all__ = [
     "JsonLogFormatter",
@@ -13,5 +20,10 @@ __all__ = [
     "configure_json_logging",
     "reset_log_context",
     "set_log_context",
+    "HttpLangfuseAdapter",
+    "LangfuseAdapter",
+    "MetricNames",
+    "NoOpLangfuseAdapter",
+    "configure_langfuse",
     "configure_telemetry",
 ]
