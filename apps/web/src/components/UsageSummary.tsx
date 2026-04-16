@@ -16,6 +16,14 @@ function formatNumber(value: number): string {
   return value.toLocaleString();
 }
 
+function compactModelId(modelId: string): string {
+  if (!modelId.trim()) {
+    return "unknown";
+  }
+  const parts = modelId.split(".");
+  return parts[parts.length - 1] || modelId;
+}
+
 function formatBudgetStatus(status: string): string {
   if (!status.trim()) {
     return "Unknown";
@@ -42,6 +50,7 @@ export function UsageSummary({
   const latestBudgetTotal = latestBudget?.total_usd ?? 0;
   const latestBudgetRemaining = latestBudget?.remaining_usd ?? null;
   const latestBudgetPercent = budgetPercent(latestBudgetTotal, latestBudgetMax);
+  const primaryModel = latestRunMetrics?.model_usage[0] ?? null;
 
   const hasAnyMetrics = useMemo(() => {
     if (sessionMetrics && sessionMetrics.run_count > 0) {
@@ -60,6 +69,11 @@ export function UsageSummary({
         <div className="budget-surface-main">
           <span className="usage-group-label">Run budget</span>
           <strong>{formatBudgetStatus(latestBudget?.status ?? "unknown")}</strong>
+          {primaryModel ? (
+            <span title={primaryModel.model_id}>
+              {primaryModel.provider} / {compactModelId(primaryModel.model_id)}
+            </span>
+          ) : null}
           <span>{formatCost(latestBudgetTotal)} spent</span>
           <span>
             {latestBudgetRemaining === null
@@ -100,6 +114,11 @@ export function UsageSummary({
           <span className="usage-chip">
             Out {formatNumber(latestRunMetrics?.usage.tokens_output ?? 0)}
           </span>
+          {primaryModel ? (
+            <span className="usage-chip" title={primaryModel.model_id}>
+              {primaryModel.provider} {compactModelId(primaryModel.model_id)}
+            </span>
+          ) : null}
         </div>
         <button
           className="button-muted usage-details-toggle"

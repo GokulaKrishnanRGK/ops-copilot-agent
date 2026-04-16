@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NodeUsage, Run } from "../types";
+import { ModelUsage, NodeUsage, Run } from "../types";
 
 type UsageDetailsModalProps = {
   isOpen: boolean;
@@ -21,6 +21,14 @@ function compactNodeLabel(agentNode: string): string {
     return "unknown";
   }
   return agentNode.replaceAll("_", " ");
+}
+
+function compactModelLabel(modelId: string): string {
+  if (!modelId.trim()) {
+    return "unknown";
+  }
+  const parts = modelId.split(".");
+  return parts[parts.length - 1] || modelId;
 }
 
 const PIE_COLORS = [
@@ -175,6 +183,33 @@ function NodeUsageSection({
   );
 }
 
+function ModelUsageSection({ items }: { items: ModelUsage[] }) {
+  return (
+    <section className="usage-modal-section">
+      <h3>Provider and model</h3>
+      {items.length === 0 ? (
+        <p className="usage-details-empty">No records.</p>
+      ) : (
+        <ul className="usage-model-list">
+          {items.map((item) => (
+            <li key={`${item.provider}-${item.model_id}`} className="usage-model-item">
+              <div className="usage-model-main">
+                <span>{item.provider}</span>
+                <strong title={item.model_id}>{compactModelLabel(item.model_id)}</strong>
+              </div>
+              <div className="usage-model-metrics">
+                <span>{formatNumber(item.tokens_input)} in</span>
+                <span>{formatNumber(item.tokens_output)} out</span>
+                <span>{formatCost(item.cost_usd)}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function UsageDetailsModal({
   isOpen,
   latestRun,
@@ -182,6 +217,7 @@ export function UsageDetailsModal({
   onClose,
 }: UsageDetailsModalProps) {
   const latestRunNodeUsage = latestRun?.metrics.node_usage ?? [];
+  const latestRunModelUsage = latestRun?.metrics.model_usage ?? [];
   const legendNodes = useMemo(() => {
     const seen = new Set<string>();
     const merged = [...latestRunNodeUsage, ...sessionNodeUsage];
@@ -236,6 +272,7 @@ export function UsageDetailsModal({
             items={sessionNodeUsage}
             colorMap={colorMap}
           />
+          <ModelUsageSection items={latestRunModelUsage} />
         </div>
         <ul className="usage-pie-legend shared">
           {legendNodes.map((node) => (
