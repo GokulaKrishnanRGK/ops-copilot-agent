@@ -199,7 +199,7 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: "${LANGFUSE_INIT_USER_PASSWORD:-opscopilot-admin}"
     depends_on: *langfuse-depends-on
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://$$(hostname):3000/api/public/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 30
