@@ -53,6 +53,9 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT_COMPOSE:-http://otel-collector:4318}"
       OTEL_EXPORTER_OTLP_PROTOCOL: "${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}"
       OTEL_SERVICE_NAME: "${OTEL_SERVICE_NAME_API:-ops-copilot-api}"
+      LANGFUSE_HOST: "${LANGFUSE_HOST_COMPOSE:-http://langfuse-web:3000}"
+      LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-pk-lf-opscopilot-local}"
+      LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-sk-lf-opscopilot-local}"
     volumes:
       - "${LOGS_HOST_PATH}:${LOGS_HOST_PATH}"
     depends_on:
