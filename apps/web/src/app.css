@@ -411,6 +411,24 @@
     font-size: 13px;
   }
 
+  .budget-status {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 8px;
+    background: var(--surface-raised);
+  }
+
+  .budget-status.available {
+    color: var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 42%, var(--border) 58%);
+  }
+
+  .budget-status.exhausted,
+  .budget-status.exceeded {
+    color: var(--error);
+    border-color: color-mix(in srgb, var(--error) 42%, var(--border) 58%);
+  }
+
   .budget-surface-main span:not(.usage-group-label) {
     color: var(--muted);
   }
@@ -429,6 +447,30 @@
     min-width: 0;
     border-radius: inherit;
     background: var(--brand);
+  }
+
+  .cost-status-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .cost-status-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-raised);
+    padding: 7px 8px;
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .cost-status-item strong {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .usage-row {
@@ -473,6 +515,10 @@
 
   @media (max-width: 720px) {
     .budget-surface {
+      grid-template-columns: 1fr;
+    }
+
+    .cost-status-row {
       grid-template-columns: 1fr;
     }
   }

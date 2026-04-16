@@ -31,6 +31,13 @@ function formatBudgetStatus(status: string): string {
   return status.replaceAll("_", " ");
 }
 
+function budgetStatusClass(status: string): string {
+  if (status === "available" || status === "exhausted" || status === "exceeded") {
+    return status;
+  }
+  return "unknown";
+}
+
 function budgetPercent(totalUsd: number, maxUsd: number | null): number {
   if (maxUsd === null || maxUsd <= 0) {
     return 0;
@@ -50,6 +57,7 @@ export function UsageSummary({
   const latestBudgetTotal = latestBudget?.total_usd ?? 0;
   const latestBudgetRemaining = latestBudget?.remaining_usd ?? null;
   const latestBudgetPercent = budgetPercent(latestBudgetTotal, latestBudgetMax);
+  const latestBudgetStatus = latestBudget?.status ?? "unknown";
   const primaryModel = latestRunMetrics?.model_usage[0] ?? null;
 
   const hasAnyMetrics = useMemo(() => {
@@ -68,7 +76,9 @@ export function UsageSummary({
       <div className="budget-surface" title="Latest run budget">
         <div className="budget-surface-main">
           <span className="usage-group-label">Run budget</span>
-          <strong>{formatBudgetStatus(latestBudget?.status ?? "unknown")}</strong>
+          <strong className={`budget-status ${budgetStatusClass(latestBudgetStatus)}`}>
+            {formatBudgetStatus(latestBudgetStatus)}
+          </strong>
           {primaryModel ? (
             <span title={primaryModel.model_id}>
               {primaryModel.provider} / {compactModelId(primaryModel.model_id)}
@@ -85,10 +95,26 @@ export function UsageSummary({
           <span style={{ width: `${latestBudgetPercent}%` }} />
         </div>
       </div>
+      <div className="cost-status-row" title="Latest run estimated cost and budget state">
+        <span className="cost-status-item">
+          <span className="usage-group-label">Estimated cost</span>
+          <strong>{formatCost(latestRunMetrics?.usage.cost_usd ?? 0)}</strong>
+        </span>
+        <span className="cost-status-item">
+          <span className="usage-group-label">Budget status</span>
+          <strong>{formatBudgetStatus(latestBudgetStatus)}</strong>
+        </span>
+        <span className="cost-status-item">
+          <span className="usage-group-label">Limit</span>
+          <strong>{latestBudgetMax === null ? "Unset" : formatCost(latestBudgetMax)}</strong>
+        </span>
+      </div>
       <div className="usage-row">
         <div className="usage-group" title="Aggregated usage for this session">
           <span className="usage-group-label">Session</span>
-          <span className="usage-chip">Cost {formatCost(sessionMetrics?.usage.cost_usd ?? 0)}</span>
+          <span className="usage-chip">
+            Est. cost {formatCost(sessionMetrics?.usage.cost_usd ?? 0)}
+          </span>
           <span className="usage-chip">
             Budget {formatCost(sessionMetrics?.budget.total_usd ?? 0)}
           </span>
@@ -103,7 +129,7 @@ export function UsageSummary({
         <div className="usage-group muted" title="Usage for the latest run in this session">
           <span className="usage-group-label">Latest run</span>
           <span className="usage-chip">
-            Cost {formatCost(latestRunMetrics?.usage.cost_usd ?? 0)}
+            Est. cost {formatCost(latestRunMetrics?.usage.cost_usd ?? 0)}
           </span>
           <span className="usage-chip">
             Budget {formatCost(latestRunMetrics?.budget.total_usd ?? 0)}
