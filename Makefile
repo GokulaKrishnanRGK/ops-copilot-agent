@@ -46,7 +46,7 @@ test-agent-integration:
 test-unit:
 	cd apps/web && npm test
 	cd apps/api && pytest -m "not integration"
-	cd apps/tool-server && go test ./...
+	cd apps/tool-server && go test -short ./...
 	cd packages/db && pytest -m "not integration"
 	cd packages/llm-gateway && pytest -m "not integration"
 	cd packages/rag && pytest -m "not integration"

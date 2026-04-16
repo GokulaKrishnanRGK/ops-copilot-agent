@@ -12,6 +12,7 @@ import (
 
 	"github.com/ops-copilot/tool-server/internal/server"
 	"github.com/stretchr/testify/require"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type jsonrpcResponse struct {
@@ -74,9 +75,7 @@ func TestMCPToolsList(t *testing.T) {
 
 func TestMCPListPods(t *testing.T) {
 	require := require.New(t)
-	if !hasLocalKubeconfig() {
-		t.Skip("kubeconfig not available")
-	}
+	requireKubeIntegration(t)
 	t.Setenv("MCP_JSON_RESPONSE", "true")
 	t.Setenv("K8S_ALLOWED_NAMESPACES", "default")
 	mux := http.NewServeMux()
@@ -126,9 +125,7 @@ func TestMCPListPods(t *testing.T) {
 
 func TestMCPDescribePod(t *testing.T) {
 	require := require.New(t)
-	if !hasLocalKubeconfig() {
-		t.Skip("kubeconfig not available")
-	}
+	requireKubeIntegration(t)
 	t.Setenv("MCP_JSON_RESPONSE", "true")
 	t.Setenv("K8S_ALLOWED_NAMESPACES", "default")
 	mux := http.NewServeMux()
@@ -259,7 +256,17 @@ func firstPodName(baseURL string) string {
 	return name
 }
 
-func hasLocalKubeconfig() bool {
+func requireKubeIntegration(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping Kubernetes integration test in short mode")
+	}
+	if !hasUsableKubeconfig() {
+		t.Skip("usable kubeconfig not available")
+	}
+}
+
+func hasUsableKubeconfig() bool {
 	path := os.Getenv("KUBECONFIG_PATH")
 	if path == "" {
 		path = os.Getenv("KUBECONFIG")
@@ -268,6 +275,10 @@ func hasLocalKubeconfig() bool {
 		path = filepath.Join(os.Getenv("HOME"), ".kube", "config")
 	}
 	_, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	_, err = clientcmd.BuildConfigFromFlags("", path)
 	return err == nil
 }
 
