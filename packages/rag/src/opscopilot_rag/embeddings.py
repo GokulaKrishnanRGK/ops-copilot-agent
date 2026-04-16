@@ -6,7 +6,6 @@ import uuid
 
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
-from opscopilot_llm_gateway.costs import load_cost_table
 from opscopilot_llm_gateway.embeddings import build_embedding_provider, read_embedding_model_id
 from opscopilot_llm_gateway.gateway import run_embedding_call
 from opscopilot_llm_gateway.types import EmbeddingRequest, EmbeddingResponse, LlmTags
@@ -32,14 +31,6 @@ def _read_budget() -> float:
         raise RuntimeError("RAG_EMBEDDING_MAX_BUDGET_USD must be a number") from exc
 
 
-def read_cost_table_path() -> str:
-    return _read_env("LLM_COST_TABLE_PATH")
-
-
-def build_bedrock_client():
-    raise RuntimeError("bedrock_client_not_configured")
-
-
 class EmbeddingAdapter:
     def embed(self, request: RagEmbeddingRequest) -> EmbeddingResult:
         raise NotImplementedError("embedding adapter is not configured")
@@ -50,14 +41,11 @@ class OpenAIEmbeddingAdapter(EmbeddingAdapter):
         self,
         provider=None,
         model: str | None = None,
-        cost_table_path: str | None = None,
         budget: BudgetEnforcer | None = None,
         ledger: CostLedger | None = None,
-        bedrock_client=None,
     ) -> None:
-        self.provider = provider or build_embedding_provider(client=bedrock_client)
+        self.provider = provider or build_embedding_provider()
         self.model = model or read_embedding_model_id()
-        self.cost_table = load_cost_table(cost_table_path or read_cost_table_path())
         self.budget = budget or BudgetEnforcer(
             BudgetState(max_usd=_read_budget(), total_usd=0.0)
         )
@@ -79,7 +67,6 @@ class OpenAIEmbeddingAdapter(EmbeddingAdapter):
         response: EmbeddingResponse = run_embedding_call(
             provider=self.provider,
             request=gateway_request,
-            cost_table=self.cost_table,
             budget=self.budget,
             ledger=self.ledger,
         )

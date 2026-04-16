@@ -22,7 +22,9 @@ from opscopilot_agent_runtime.state import AgentState
 from opscopilot_db import models
 from opscopilot_db.base import Base
 from opscopilot_db.connection import get_engine, get_sessionmaker
-from opscopilot_llm_gateway.providers.bedrock import BedrockProvider, build_bedrock_client
+from opscopilot_llm_gateway.accounting import CostLedger
+from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
+from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 
 
 def _ensure_schema():
@@ -43,8 +45,6 @@ def test_prompt_run_persists_steps():
         pytest.skip("DATABASE_URL not set")
     if not os.getenv("LLM_MODEL_ID"):
         pytest.skip("LLM_MODEL_ID not set")
-    if not os.getenv("LLM_COST_TABLE_PATH"):
-        pytest.skip("LLM_COST_TABLE_PATH not set")
     if not os.getenv("AWS_REGION"):
         pytest.skip("AWS_REGION not set")
     logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
@@ -54,11 +54,13 @@ def test_prompt_run_persists_steps():
     session_id = str(uuid.uuid4())
     recorder = AgentRunRecorder(session_id=session_id, run_id=run_id)
 
-    provider = BedrockProvider(build_bedrock_client())
-    llm_planner = LlmPlanner.from_env(provider=provider, recorder=recorder)
-    answer_synthesizer = AnswerSynthesizer.from_env(provider=provider, recorder=recorder)
-    clarifier = LlmClarifier.from_env(provider=provider)
-    scope_classifier = ScopeClassifier.from_env(provider=provider, recorder=recorder)
+    provider = BedrockProvider()
+    budget = BudgetEnforcer(BudgetState(max_usd=float(os.getenv("LLM_MAX_BUDGET_USD", "5.0")), total_usd=0.0))
+    ledger = CostLedger()
+    llm_planner = LlmPlanner.from_env(provider=provider, budget=budget, ledger=ledger, recorder=recorder)
+    answer_synthesizer = AnswerSynthesizer.from_env(provider=provider, budget=budget, ledger=ledger, recorder=recorder)
+    clarifier = LlmClarifier.from_env(provider=provider, budget=budget, ledger=ledger)
+    scope_classifier = ScopeClassifier.from_env(provider=provider, budget=budget, ledger=ledger, recorder=recorder)
 
     client = MCPClient.from_env()
     graph = AgentGraph(

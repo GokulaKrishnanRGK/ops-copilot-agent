@@ -15,7 +15,9 @@ from opscopilot_agent_runtime.nodes.tool_executor_node import ToolExecutorNode
 from opscopilot_agent_runtime.runtime import AgentRuntime, ExecutionLimits
 from opscopilot_agent_runtime.runtime.tool_registry import ToolRegistry
 from opscopilot_agent_runtime.state import AgentState
-from opscopilot_llm_gateway.providers.bedrock import BedrockProvider, build_bedrock_client
+from opscopilot_llm_gateway.accounting import CostLedger
+from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
+from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 
 
 def _embedding_provider() -> str:
@@ -23,7 +25,7 @@ def _embedding_provider() -> str:
 
 
 def _missing_env() -> list[str]:
-    required = ["OPENSEARCH_URL", "OPENSEARCH_INDEX", "LLM_MODEL_ID", "LLM_COST_TABLE_PATH", "AWS_REGION"]
+    required = ["OPENSEARCH_URL", "OPENSEARCH_INDEX", "LLM_MODEL_ID", "AWS_REGION"]
     provider = _embedding_provider()
     if provider == "openai":
         required += ["OPENAI_API_KEY", "OPENAI_EMBEDDING_MODEL"]
@@ -38,11 +40,13 @@ def test_rag_retrieval_in_runtime(monkeypatch):
     if missing:
         pytest.skip("missing env: " + ", ".join(missing))
 
-    provider = BedrockProvider(build_bedrock_client())
-    synthesizer = AnswerSynthesizer.from_env(provider=provider)
-    llm_planner = LlmPlanner.from_env(provider=provider)
-    clarifier = LlmClarifier.from_env(provider=provider)
-    scope = ScopeClassifier.from_env(provider=provider)
+    provider = BedrockProvider()
+    budget = BudgetEnforcer(BudgetState(max_usd=float(os.getenv("LLM_MAX_BUDGET_USD", "5.0")), total_usd=0.0))
+    ledger = CostLedger()
+    synthesizer = AnswerSynthesizer.from_env(provider=provider, budget=budget, ledger=ledger)
+    llm_planner = LlmPlanner.from_env(provider=provider, budget=budget, ledger=ledger)
+    clarifier = LlmClarifier.from_env(provider=provider, budget=budget, ledger=ledger)
+    scope = ScopeClassifier.from_env(provider=provider, budget=budget, ledger=ledger)
     client = MCPClient.from_env()
     graph = AgentGraph(
         tool_registry=ToolRegistry(client=client),

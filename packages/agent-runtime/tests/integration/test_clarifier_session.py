@@ -16,8 +16,13 @@ from opscopilot_agent_runtime.nodes.tool_executor_node import ToolExecutorNode
 from opscopilot_agent_runtime.runtime import AgentRuntime, ExecutionLimits
 from opscopilot_agent_runtime.runtime.tool_registry import ToolRegistry
 from opscopilot_agent_runtime.state import AgentState
-from opscopilot_llm_gateway.providers.bedrock import BedrockProvider, \
-  build_bedrock_client
+from opscopilot_llm_gateway.accounting import CostLedger
+from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
+from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
+
+
+def _read_budget() -> float:
+    return float(os.getenv("LLM_MAX_BUDGET_USD", "5.0"))
 
 
 def test_clarifier_session_followup():
@@ -27,18 +32,18 @@ def test_clarifier_session_followup():
         pytest.skip("MCP_BASE_URL not set")
     if not os.getenv("LLM_MODEL_ID"):
         pytest.skip("LLM_MODEL_ID not set")
-    if not os.getenv("LLM_COST_TABLE_PATH"):
-        pytest.skip("LLM_COST_TABLE_PATH not set")
     if not os.getenv("AWS_REGION"):
         pytest.skip("AWS_REGION not set")
 
     client = MCPClient.from_env()
     registry = ToolRegistry(client=client)
-    provider = BedrockProvider(build_bedrock_client())
-    scope = ScopeClassifier.from_env(provider=provider)
-    llm_planner = LlmPlanner.from_env(provider=provider)
-    clarifier = LlmClarifier.from_env(provider=provider)
-    answer = AnswerSynthesizer.from_env(provider=provider)
+    provider = BedrockProvider()
+    budget = BudgetEnforcer(BudgetState(max_usd=_read_budget(), total_usd=0.0))
+    ledger = CostLedger()
+    scope = ScopeClassifier.from_env(provider=provider, budget=budget, ledger=ledger)
+    llm_planner = LlmPlanner.from_env(provider=provider, budget=budget, ledger=ledger)
+    clarifier = LlmClarifier.from_env(provider=provider, budget=budget, ledger=ledger)
+    answer = AnswerSynthesizer.from_env(provider=provider, budget=budget, ledger=ledger)
 
     graph = AgentGraph(
         tool_registry=registry,
@@ -77,8 +82,6 @@ def test_clarifier_session_followup():
     )
     assert second_snapshots
     second = second_snapshots[-1]
-    # logger = get_logger(__name__)
-    # logger.info("test_clarifier_session_followup state=%s", second)
     assert second.tool_results is not None
     result = second.tool_results[0].result.get("structured_content")
     assert result is not None

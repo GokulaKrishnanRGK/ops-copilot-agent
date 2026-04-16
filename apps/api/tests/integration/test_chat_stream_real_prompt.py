@@ -10,7 +10,6 @@ def _missing_env() -> list[str]:
         "MCP_BASE_URL",
         "DATABASE_URL",
         "LLM_MODEL_ID",
-        "LLM_COST_TABLE_PATH",
         "AWS_REGION",
     ]
     missing = [name for name in required if not os.getenv(name)]

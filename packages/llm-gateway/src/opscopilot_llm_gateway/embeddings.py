@@ -4,23 +4,21 @@ import os
 
 from opscopilot_llm_gateway.providers.bedrock_embeddings import (
     BedrockEmbeddingProvider,
-    build_bedrock_client,
     read_bedrock_embedding_model_id,
 )
-from opscopilot_llm_gateway.providers.openai import OpenAIEmbeddingProvider, build_openai_client
+from opscopilot_llm_gateway.providers.openai import OpenAIEmbeddingProvider
 
 
 def _read_provider() -> str:
     return os.getenv("LLM_EMBEDDING_PROVIDER", "openai")
 
 
-def build_embedding_provider(client=None):
+def build_embedding_provider():
     provider = _read_provider().lower()
     if provider == "openai":
-        return OpenAIEmbeddingProvider(client=client or build_openai_client())
+        return OpenAIEmbeddingProvider()
     if provider == "bedrock":
-        bedrock_client = client or build_bedrock_client()
-        return BedrockEmbeddingProvider(client=bedrock_client)
+        return BedrockEmbeddingProvider()
     raise RuntimeError("unknown_embedding_provider")
 
 

@@ -6,8 +6,7 @@ import uuid
 from typing import Callable
 
 from opscopilot_llm_gateway.accounting import CostLedger
-from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
-from opscopilot_llm_gateway.costs import load_cost_table
+from opscopilot_llm_gateway.budgets import BudgetEnforcer
 from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 from opscopilot_llm_gateway.types import LlmMessage, LlmRequest, LlmResponseFormat, LlmTags
 
@@ -21,14 +20,6 @@ def _read_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is required")
     return value
-
-
-def _read_budget() -> float:
-    value = os.getenv("LLM_MAX_BUDGET_USD", "1.0")
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise RuntimeError("LLM_MAX_BUDGET_USD must be a number") from exc
 
 
 def _clarifier_schema() -> dict:
@@ -61,20 +52,19 @@ class LlmClarifier(LlmNodeBase):
         self,
         provider: BedrockProvider,
         model_id: str,
-        cost_table: dict,
         budget: BudgetEnforcer,
         ledger: CostLedger,
     ) -> None:
-        super().__init__(provider, model_id, cost_table, budget, ledger)
+        super().__init__(provider, model_id, budget, ledger)
 
     @staticmethod
-    def from_env(provider: BedrockProvider) -> "LlmClarifier":
+    def from_env(
+        provider: BedrockProvider,
+        budget: BudgetEnforcer,
+        ledger: CostLedger,
+    ) -> "LlmClarifier":
         model_id = _read_env("LLM_MODEL_ID")
-        cost_table_path = _read_env("LLM_COST_TABLE_PATH")
-        cost_table = load_cost_table(cost_table_path)
-        budget = BudgetEnforcer(BudgetState(max_usd=_read_budget(), total_usd=0.0))
-        ledger = CostLedger()
-        return LlmClarifier(provider, model_id, cost_table, budget, ledger)
+        return LlmClarifier(provider, model_id, budget, ledger)
 
     def clarify(
         self,

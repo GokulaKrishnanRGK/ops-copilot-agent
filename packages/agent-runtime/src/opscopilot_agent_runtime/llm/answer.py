@@ -6,8 +6,7 @@ import uuid
 from typing import Callable
 
 from opscopilot_llm_gateway.accounting import CostLedger
-from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
-from opscopilot_llm_gateway.costs import load_cost_table
+from opscopilot_llm_gateway.budgets import BudgetEnforcer
 from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 from opscopilot_llm_gateway.types import (
     LlmMessage,
@@ -26,14 +25,6 @@ def _read_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is required")
     return value
-
-
-def _read_budget() -> float:
-    value = os.getenv("LLM_MAX_BUDGET_USD", "1.0")
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise RuntimeError("LLM_MAX_BUDGET_USD must be a number") from exc
 
 
 def _response_schema() -> dict:
@@ -67,7 +58,6 @@ def _tool_summary(tool_results: list) -> str:
             tool_result = result.get("result")
         summarized = tool_result
         if isinstance(tool_result, dict):
-            # Prefer structured content over raw content text to avoid huge log payloads.
             summarized = tool_result.get("structured_content", tool_result)
             if isinstance(summarized, dict) and "result" in summarized:
                 result_payload = summarized.get("result")
@@ -85,25 +75,22 @@ class AnswerSynthesizer(LlmNodeBase):
         self,
         provider: BedrockProvider,
         model_id: str,
-        cost_table: dict,
         budget: BudgetEnforcer,
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
     ) -> None:
-        super().__init__(provider, model_id, cost_table, budget, ledger)
+        super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
 
     @staticmethod
     def from_env(
         provider: BedrockProvider,
+        budget: BudgetEnforcer,
+        ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
     ) -> "AnswerSynthesizer":
         model_id = _read_env("LLM_MODEL_ID")
-        cost_table_path = _read_env("LLM_COST_TABLE_PATH")
-        cost_table = load_cost_table(cost_table_path)
-        budget = BudgetEnforcer(BudgetState(max_usd=_read_budget(), total_usd=0.0))
-        ledger = CostLedger()
-        return AnswerSynthesizer(provider, model_id, cost_table, budget, ledger, recorder=recorder)
+        return AnswerSynthesizer(provider, model_id, budget, ledger, recorder=recorder)
 
     def synthesize(
         self,

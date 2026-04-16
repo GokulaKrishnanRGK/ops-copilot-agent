@@ -1,84 +1,29 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
 import json
-import logging
-import os
 import time
-from typing import Any
+from typing import Callable
 
-import boto3
+import litellm
 
-from opscopilot_llm_gateway.normalize import (
-    normalize_output_json,
-    normalize_output_text,
-    normalize_response,
-)
-from opscopilot_llm_gateway.types import LlmRequest, LlmResponse
-
-logger = logging.getLogger(__name__)
-
-@dataclass(frozen=True)
-class BedrockResult:
-    output_text: str | None
-    output_json: dict | None
-    tokens_input: int
-    tokens_output: int
-    cost_usd: float
-    latency_ms: int
-    provider_metadata: dict[str, Any]
+from opscopilot_llm_gateway.types import LlmOutput, LlmRequest, LlmResponse
 
 
-class BedrockProvider:
-    def __init__(self, client: Any):
-        self._client = client
-
-    def invoke(self, request: LlmRequest) -> LlmResponse:
-        raw = self._client.invoke(request)
-        output = self._to_output(raw)
-        return normalize_response(
-            output=output,
-            tokens_input=raw.tokens_input,
-            tokens_output=raw.tokens_output,
-            cost_usd=raw.cost_usd,
-            latency_ms=raw.latency_ms,
-            provider_metadata=raw.provider_metadata,
-            error=None,
-        )
-
-    def invoke_stream(self, request: LlmRequest, on_delta) -> LlmResponse:
-        raw = self._client.invoke_stream(request, on_delta)
-        output = self._to_output(raw)
-        return normalize_response(
-            output=output,
-            tokens_input=raw.tokens_input,
-            tokens_output=raw.tokens_output,
-            cost_usd=raw.cost_usd,
-            latency_ms=raw.latency_ms,
-            provider_metadata=raw.provider_metadata,
-            error=None,
-        )
-
-    def _to_output(self, raw: BedrockResult):
-        if raw.output_json is not None:
-            return normalize_output_json(raw.output_json)
-        return normalize_output_text(raw.output_text or "")
+def _prefixed(model_id: str) -> str:
+    if model_id.startswith("bedrock/"):
+        return model_id
+    return f"bedrock/{model_id}"
 
 
-def _read_region() -> str:
-    region = os.getenv("BEDROCK_REGION") or os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
-    if not region:
-        raise RuntimeError("BEDROCK_REGION is required")
-    return region
-
-
-def _build_prompt(request: LlmRequest) -> str:
-    parts = []
-    for message in request.messages:
-        parts.append(f"{message.role}: {message.content}")
-    prompt = "\n".join(parts)
+def _build_messages(request: LlmRequest) -> list[dict]:
+    msgs = [{"role": m.role, "content": m.content} for m in request.messages]
     if request.response_format.type == "json_schema" and request.response_format.schema:
-        schema = json.dumps(request.response_format.schema)
-        prompt = f"{prompt}\n\nReturn JSON only that matches this schema: {schema}"
-    return prompt
+        schema_str = json.dumps(request.response_format.schema)
+        for i in range(len(msgs) - 1, -1, -1):
+            if msgs[i]["role"] == "user":
+                msgs[i] = {**msgs[i], "content": f"{msgs[i]['content']}\n\nReturn JSON only that matches this schema: {schema_str}"}
+                break
+    return msgs
 
 
 def _parse_json(text: str) -> dict | None:
@@ -89,115 +34,91 @@ def _parse_json(text: str) -> dict | None:
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
             return None
-        snippet = text[start : end + 1]
         try:
-            return json.loads(snippet)
+            return json.loads(text[start : end + 1])
         except Exception:
             return None
 
 
-@dataclass(frozen=True)
-class BedrockClient:
-    client: Any
+def _make_output(text: str, is_json: bool) -> LlmOutput:
+    if is_json:
+        parsed = _parse_json(text)
+        if parsed is not None:
+            return LlmOutput(type="json", text=None, json=parsed)
+    return LlmOutput(type="text", text=text, json=None)
 
-    def invoke(self, request: LlmRequest) -> BedrockResult:
-        prompt = _build_prompt(request)
+
+def _extract_cost(response) -> float:
+    try:
+        return float(response._hidden_params.get("response_cost") or 0.0)
+    except Exception:
+        return 0.0
+
+
+class BedrockProvider:
+    def invoke(self, request: LlmRequest) -> LlmResponse:
         start = time.monotonic()
-        response = self.client.converse(
-            modelId=request.model_id,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [{"text": prompt}],
-                }
-            ],
-            inferenceConfig={
-                "maxTokens": request.max_tokens,
-                "temperature": request.temperature,
-            },
+        response = litellm.completion(
+            model=_prefixed(request.model_id),
+            messages=_build_messages(request),
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            stream=False,
         )
         latency_ms = int((time.monotonic() - start) * 1000)
-        message = response.get("output", {}).get("message", {})
-        content = message.get("content", [])
-        text = ""
-        if content:
-            text = content[0].get("text", "")
-        output_json = None
-        if request.response_format.type == "json_schema":
-            output_json = _parse_json(text)
-        logger.debug(
-            "bedrock response model=%s text=%s json=%s",
-            request.model_id,
-            text,
-            output_json,
-        )
-        return BedrockResult(
-            output_text=text if output_json is None else None,
-            output_json=output_json,
-            tokens_input=response.get("usage", {}).get("inputTokens", 0),
-            tokens_output=response.get("usage", {}).get("outputTokens", 0),
-            cost_usd=0.0,
+        text = response.choices[0].message.content or ""
+        usage = response.usage or {}
+        tokens_input = getattr(usage, "prompt_tokens", 0) or 0
+        tokens_output = getattr(usage, "completion_tokens", 0) or 0
+        return LlmResponse(
+            output=_make_output(text, request.response_format.type == "json_schema"),
+            tokens_input=tokens_input,
+            tokens_output=tokens_output,
+            cost_usd=_extract_cost(response),
             latency_ms=latency_ms,
             provider_metadata={"model": request.model_id},
+            error=None,
         )
 
-    def invoke_stream(self, request: LlmRequest, on_delta) -> BedrockResult:
-        prompt = _build_prompt(request)
+    def invoke_stream(self, request: LlmRequest, on_delta: Callable[[str], None]) -> LlmResponse:
         start = time.monotonic()
-        response = self.client.converse_stream(
-            modelId=request.model_id,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [{"text": prompt}],
-                }
-            ],
-            inferenceConfig={
-                "maxTokens": request.max_tokens,
-                "temperature": request.temperature,
-            },
+        stream = litellm.completion(
+            model=_prefixed(request.model_id),
+            messages=_build_messages(request),
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
         )
         chunks: list[str] = []
-        stream = response.get("stream", [])
-        usage = {}
-        for event in stream:
-            delta = event.get("contentBlockDelta", {}).get("delta", {})
-            text_delta = delta.get("text")
-            if text_delta:
-                chunks.append(text_delta)
-                on_delta(text_delta)
-            metadata = event.get("metadata", {})
-            if metadata.get("usage"):
-                usage = metadata.get("usage", {})
+        tokens_input = 0
+        tokens_output = 0
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                chunks.append(delta)
+                on_delta(delta)
+            usage = getattr(chunk, "usage", None)
+            if usage:
+                tokens_input = getattr(usage, "prompt_tokens", 0) or 0
+                tokens_output = getattr(usage, "completion_tokens", 0) or 0
 
-        text = "".join(chunks)
         latency_ms = int((time.monotonic() - start) * 1000)
-        output_json = None
-        if request.response_format.type == "json_schema":
-            output_json = _parse_json(text)
-        logger.debug(
-            "bedrock stream response model=%s text=%s json=%s",
-            request.model_id,
-            text,
-            output_json,
-        )
-        return BedrockResult(
-            output_text=text if output_json is None else None,
-            output_json=output_json,
-            tokens_input=usage.get("inputTokens", 0),
-            tokens_output=usage.get("outputTokens", 0),
-            cost_usd=0.0,
+        text = "".join(chunks)
+        try:
+            cost_usd = litellm.completion_cost(
+                model=_prefixed(request.model_id),
+                prompt_tokens=tokens_input,
+                completion_tokens=tokens_output,
+            )
+        except Exception:
+            cost_usd = 0.0
+        return LlmResponse(
+            output=_make_output(text, request.response_format.type == "json_schema"),
+            tokens_input=tokens_input,
+            tokens_output=tokens_output,
+            cost_usd=float(cost_usd),
             latency_ms=latency_ms,
             provider_metadata={"model": request.model_id},
+            error=None,
         )
-
-
-def build_bedrock_client() -> BedrockClient:
-    profile = os.getenv("AWS_PROFILE")
-    region = _read_region()
-    if profile:
-        session = boto3.Session(profile_name=profile, region_name=region)
-        runtime = session.client("bedrock-runtime")
-    else:
-        runtime = boto3.client("bedrock-runtime", region_name=region)
-    return BedrockClient(client=runtime)

@@ -151,6 +151,9 @@ kubectl -n "${helm_namespace}" create secret generic opscopilot-api-secrets \
   --from-literal=OPENSEARCH_USERNAME="${OPENSEARCH_USERNAME:-admin}" \
   --from-literal=OPENSEARCH_PASSWORD="${OPENSEARCH_PASSWORD:-}" \
   --from-literal=OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+  --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+  --from-literal=AWS_SESSION_TOKEN="${AWS_SESSION_TOKEN:-}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 tmp_values="$(mktemp /tmp/opscopilot-helm-local-values-XXXXXX)"
@@ -176,7 +179,6 @@ api:
     OPENSEARCH_VERIFY_CERTS: "${OPENSEARCH_VERIFY_CERTS:-false}"
     OPENSEARCH_INDEX: "${OPENSEARCH_INDEX:-opscopilot-docs}"
     LLM_MODEL_ID: "${LLM_MODEL_ID:-}"
-    LLM_COST_TABLE_PATH: "${LLM_COST_TABLE_PATH_HELM_LOCAL:-/app/config/costs.json}"
     LLM_EMBEDDING_PROVIDER: "${LLM_EMBEDDING_PROVIDER:-openai}"
     OPENAI_EMBEDDING_MODEL: "${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}"
     BEDROCK_EMBEDDING_MODEL_ID: "${BEDROCK_EMBEDDING_MODEL_ID:-}"
@@ -198,6 +200,15 @@ api:
     OPENAI_API_KEY:
       secretName: "opscopilot-api-secrets"
       secretKey: "OPENAI_API_KEY"
+    AWS_ACCESS_KEY_ID:
+      secretName: "opscopilot-api-secrets"
+      secretKey: "AWS_ACCESS_KEY_ID"
+    AWS_SECRET_ACCESS_KEY:
+      secretName: "opscopilot-api-secrets"
+      secretKey: "AWS_SECRET_ACCESS_KEY"
+    AWS_SESSION_TOKEN:
+      secretName: "opscopilot-api-secrets"
+      secretKey: "AWS_SESSION_TOKEN"
 web:
   env:
     WEB_API_BASE_URL: "/api"

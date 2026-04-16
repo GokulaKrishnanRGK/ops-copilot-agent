@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
 from opscopilot_llm_gateway.types import EmbeddingRequest, EmbeddingResponse
@@ -21,13 +19,9 @@ class FakeEmbeddingProvider:
 
 
 def test_openai_embedding_adapter_uses_gateway():
-    repo_root = Path(__file__).resolve().parents[3]
-    cost_table_path = repo_root / "llm-gateway/src/opscopilot_llm_gateway/costs.json"
-
     adapter = OpenAIEmbeddingAdapter(
         provider=FakeEmbeddingProvider(),
         model="text-embedding-3-small",
-        cost_table_path=str(cost_table_path),
         budget=BudgetEnforcer(BudgetState(max_usd=1.0, total_usd=0.0)),
         ledger=CostLedger(),
     )

@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import json
 import os
 import time
-from dataclasses import dataclass
-from typing import Any
 
-import boto3
+import litellm
 
 from opscopilot_llm_gateway.types import EmbeddingRequest, EmbeddingResponse
 
@@ -25,70 +22,32 @@ def read_bedrock_embedding_model_id() -> str:
     return model_id
 
 
-@dataclass(frozen=True)
-class BedrockEmbeddingClient:
-    client: Any
-
-    def invoke_embedding(self, model_id: str, texts: list[str]):
-        vectors: list[list[float]] = []
-        tokens_input = 0
-        for text in texts:
-            body = json.dumps({"inputText": text})
-            attempts = 0
-            while True:
-                try:
-                    response = self.client.invoke_model(modelId=model_id, body=body)
-                    payload = json.loads(response["body"].read().decode("utf-8"))
-                    vectors.append(payload.get("embedding", []))
-                    break
-                except Exception as exc:
-                    attempts += 1
-                    if attempts >= 5:
-                        raise exc
-                    time.sleep(2**attempts / 2)
-        return BedrockEmbeddingResult(
-            vectors=vectors,
-            tokens_input=tokens_input,
-            cost_usd=0.0,
-            provider_metadata={"model": model_id},
-        )
+def _prefixed(model_id: str) -> str:
+    if model_id.startswith("bedrock/"):
+        return model_id
+    return f"bedrock/{model_id}"
 
 
-@dataclass(frozen=True)
-class BedrockEmbeddingResult:
-    vectors: list[list[float]]
-    tokens_input: int
-    cost_usd: float
-    provider_metadata: dict[str, Any]
-
-
-@dataclass(frozen=True)
 class BedrockEmbeddingProvider:
-    client: BedrockEmbeddingClient
-
     def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
         start = time.monotonic()
-        response = self.client.invoke_embedding(
-            model_id=request.model_id,
-            texts=request.texts,
+        response = litellm.embedding(
+            model=_prefixed(request.model_id),
+            input=request.texts,
         )
         latency_ms = int((time.monotonic() - start) * 1000)
+        vectors = [item["embedding"] for item in response.data]
+        usage = getattr(response, "usage", None)
+        tokens_input = getattr(usage, "total_tokens", 0) or 0
+        try:
+            cost_usd = float(response._hidden_params.get("response_cost") or 0.0)
+        except Exception:
+            cost_usd = 0.0
         return EmbeddingResponse(
-            vectors=response.vectors,
-            tokens_input=response.tokens_input,
-            cost_usd=response.cost_usd,
+            vectors=vectors,
+            tokens_input=tokens_input,
+            cost_usd=cost_usd,
             latency_ms=latency_ms,
-            provider_metadata=response.provider_metadata,
+            provider_metadata={"model": request.model_id},
             error=None,
         )
-
-
-def build_bedrock_client() -> BedrockEmbeddingClient:
-    profile = os.getenv("AWS_PROFILE")
-    region = read_bedrock_region()
-    if profile:
-        session = boto3.Session(profile_name=profile, region_name=region)
-        runtime = session.client("bedrock-runtime")
-    else:
-        runtime = boto3.client("bedrock-runtime", region_name=region)
-    return BedrockEmbeddingClient(client=runtime)

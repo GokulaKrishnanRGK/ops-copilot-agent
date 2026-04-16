@@ -12,7 +12,9 @@ from opscopilot_agent_runtime.nodes.tool_executor_node import ToolExecutorNode
 from opscopilot_agent_runtime.runtime import AgentRuntime, ExecutionLimits
 from opscopilot_agent_runtime.runtime.tool_registry import ToolRegistry
 from opscopilot_agent_runtime.state import AgentState
-from opscopilot_llm_gateway.providers.bedrock import BedrockProvider, build_bedrock_client
+from opscopilot_llm_gateway.accounting import CostLedger
+from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
+from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 
 
 def test_scope_check_blocks_prompt_injection():
@@ -22,16 +24,16 @@ def test_scope_check_blocks_prompt_injection():
         pytest.skip("MCP_BASE_URL not set")
     if not os.getenv("LLM_MODEL_ID"):
         pytest.skip("LLM_MODEL_ID not set")
-    if not os.getenv("LLM_COST_TABLE_PATH"):
-        pytest.skip("LLM_COST_TABLE_PATH not set")
     if not os.getenv("AWS_REGION"):
         pytest.skip("AWS_REGION not set")
 
     client = MCPClient.from_env()
     registry = ToolRegistry(client=client)
-    provider = BedrockProvider(build_bedrock_client())
-    scope = ScopeClassifier.from_env(provider=provider)
-    clarifier = LlmClarifier.from_env(provider=provider)
+    provider = BedrockProvider()
+    budget = BudgetEnforcer(BudgetState(max_usd=float(os.getenv("LLM_MAX_BUDGET_USD", "5.0")), total_usd=0.0))
+    ledger = CostLedger()
+    scope = ScopeClassifier.from_env(provider=provider, budget=budget, ledger=ledger)
+    clarifier = LlmClarifier.from_env(provider=provider, budget=budget, ledger=ledger)
     graph = AgentGraph(
         tool_registry=registry,
         scope_check=ScopeCheckNode(classifier=scope),
