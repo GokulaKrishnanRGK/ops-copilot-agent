@@ -4,32 +4,28 @@ This file is loaded automatically by Claude Code. It governs all Claude Code beh
 
 ---
 
-## Mandatory Reading
+## Where to Find Information
 
-Before making any changes, read these documents in full:
+| What you need | Where to look |
+|---|---|
+| Current milestone and slice progress | `docs/PROJECT_STATE.md` |
+| Milestone definitions, scope, exit criteria | `docs/MILESTONES.md` |
+| Development protocol and slice rules | `docs/CODEX_WORKFLOW.md` |
+| Hard constraints and out-of-scope items | `docs/CONSTRAINTS.md` |
+| System architecture and component boundaries | `docs/ARCHITECTURE_OVERVIEW.md` |
+| Tech stack and language rules | `docs/TECH_STACK.md` |
+| Agent graph and node definitions | `docs/AGENT.md`, `docs/AGENT_GRAPH.md` |
+| LLM gateway design | `docs/LLM_GATEWAY.md` |
+| Tool server and MCP contract | `docs/TOOLS.md` |
+| RAG pipeline design | `docs/RAG_PIPELINE.md` |
+| Database schema and models | `docs/DATA_MODEL.md` |
+| SSE event protocol | `docs/EVENT_PROTOCOL.md` |
+| Observability and telemetry | `docs/OBSERVABILITY.md` |
+| Deployment and environment config | `docs/DEPLOYMENT.md`, `docs/CONFIGURATION.md` |
+| Test strategy and targets | `docs/TESTING.md` |
+| Project vision | `docs/VISION.md` |
 
-1. docs/CODEX_WORKFLOW.md
-2. docs/CONSTRAINTS.md
-3. docs/MILESTONES.md
-4. docs/PROJECT_STATE.md
-
-If any file is missing or unclear, stop and ask.
-
-For deeper context on a specific area, also read:
-
-- docs/VISION.md
-- docs/TECH_STACK.md
-- docs/ARCHITECTURE_OVERVIEW.md
-- docs/AGENT.md / docs/AGENT_GRAPH.md
-- docs/LLM_GATEWAY.md
-- docs/TOOLS.md
-- docs/RAG_PIPELINE.md
-- docs/DATA_MODEL.md
-- docs/EVENT_PROTOCOL.md
-- docs/OBSERVABILITY.md
-- docs/DEPLOYMENT.md
-- docs/CONFIGURATION.md
-- docs/TESTING.md
+Read `docs/PROJECT_STATE.md` and `docs/MILESTONES.md` before every session. Read the others on demand when working in that area.
 
 ---
 
@@ -42,8 +38,7 @@ For deeper context on a specific area, also read:
 - Do not add comments to code.
 - Do not refactor unrelated code.
 - Do not invent features or requirements not present in project documents.
-- Do not stage or commit any Markdown files under docs/.
-- Do not ask whether to stage docs/ Markdown changes.
+- Do not stage or commit any Markdown files under `docs/`.
 - Do not run `git commit` automatically; human approval is required.
 - TypeScript `any` type is prohibited. Use `unknown` and explicit type guards.
 
@@ -58,15 +53,13 @@ For every slice of work:
 1. State the slice goal.
 2. List the files that will be changed.
 3. Implement the change.
-4. Produce a Slice Report in the format defined in docs/CODEX_WORKFLOW.md.
+4. Produce a Slice Report in the format defined in `docs/CODEX_WORKFLOW.md`.
 5. Ask whether to stage changes with `git add` — only for non-docs files, unless the user explicitly requested staging, committing, or pushing.
 6. Stop and wait for approval before continuing.
 
 Do not proceed to the next slice without explicit instruction.
 
 ### Slice Report Format
-
-After implementing a slice, output the following and stop:
 
 **Slice Goal** — one or two sentences.
 
@@ -133,8 +126,8 @@ make run-local-helm   # Start local Helm stack
 
 ## Scope Enforcement
 
-- All work must align with the current milestone in docs/PROJECT_STATE.md.
-- docs/PROJECT_STATE.md is the source of truth for milestone progress.
+- `docs/PROJECT_STATE.md` is the source of truth for what milestone and slice are active.
+- All work must stay within the current milestone and slice.
 - If a task exceeds slice limits, stop and ask.
 - If a requirement is ambiguous, choose the simplest option or ask.
 
@@ -151,31 +144,14 @@ make run-local-helm   # Start local Helm stack
 
 ---
 
-## Current State (as of last update)
-
-**Active milestone:** L1 — Run budget and gateway visibility in UI
-
-**Remaining slice:**
-- Slice 6: Validate a demo run clearly shows provider, model, token usage, estimated cost, and budget state
-
-**Completed milestones:** M0 through M13, L1 slices 1-5
-
-**Upcoming milestones:** L2 through L6 (LinkedIn demo), then M14 onward (eval, per-node routing, caching, summarization, routing).
-
-See docs/MILESTONES.md for full milestone definitions and docs/PROJECT_STATE.md for slice-level progress.
-
----
-
 ## Adapter Pattern Conventions
 
 This project uses a consistent dev/prod adapter pattern for external dependencies:
 
 - Define a protocol (interface) in the appropriate package.
 - Provide a no-op or in-memory implementation for unit tests and local dev without external services.
-- Provide a real implementation selected by environment variable (e.g., `LANGFUSE_HOST`, `EVAL_DATASET_BUCKET`).
+- Provide a real implementation selected by environment variable.
 - Callers depend on the protocol only, never on the concrete type.
-
-Examples: `LangfuseAdapter`, `PromptSource`, `DatasetStore`, `SummaryStore`, `RouterPort`.
 
 ---
 
