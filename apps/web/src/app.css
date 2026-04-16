@@ -384,8 +384,51 @@
 
   .usage-summary {
     border-bottom: 1px solid var(--border);
-    padding: 8px 12px;
+    padding: 10px 12px;
     background: color-mix(in srgb, var(--panel) 92%, var(--brand-soft) 8%);
+  }
+
+  .budget-surface {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 22%);
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    min-height: 34px;
+  }
+
+  .budget-surface-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  .budget-surface-main strong {
+    text-transform: capitalize;
+    font-size: 13px;
+  }
+
+  .budget-surface-main span:not(.usage-group-label) {
+    color: var(--muted);
+  }
+
+  .budget-meter {
+    height: 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    overflow: hidden;
+  }
+
+  .budget-meter span {
+    display: block;
+    height: 100%;
+    min-width: 0;
+    border-radius: inherit;
+    background: var(--brand);
   }
 
   .usage-row {
@@ -426,6 +469,12 @@
     margin-left: auto;
     padding: 4px 8px;
     font-size: 12px;
+  }
+
+  @media (max-width: 720px) {
+    .budget-surface {
+      grid-template-columns: 1fr;
+    }
   }
 
   .usage-modal-backdrop {

@@ -16,6 +16,20 @@ function formatNumber(value: number): string {
   return value.toLocaleString();
 }
 
+function formatBudgetStatus(status: string): string {
+  if (!status.trim()) {
+    return "Unknown";
+  }
+  return status.replaceAll("_", " ");
+}
+
+function budgetPercent(totalUsd: number, maxUsd: number | null): number {
+  if (maxUsd === null || maxUsd <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.max(0, (totalUsd / maxUsd) * 100));
+}
+
 export function UsageSummary({
   sessionMetrics,
   latestRun,
@@ -23,6 +37,11 @@ export function UsageSummary({
   onOpenDetails,
 }: UsageSummaryProps) {
   const latestRunMetrics = latestRun?.metrics ?? null;
+  const latestBudget = latestRunMetrics?.budget ?? null;
+  const latestBudgetMax = latestBudget?.max_usd ?? null;
+  const latestBudgetTotal = latestBudget?.total_usd ?? 0;
+  const latestBudgetRemaining = latestBudget?.remaining_usd ?? null;
+  const latestBudgetPercent = budgetPercent(latestBudgetTotal, latestBudgetMax);
 
   const hasAnyMetrics = useMemo(() => {
     if (sessionMetrics && sessionMetrics.run_count > 0) {
@@ -37,6 +56,21 @@ export function UsageSummary({
 
   return (
     <div className="usage-summary">
+      <div className="budget-surface" title="Latest run budget">
+        <div className="budget-surface-main">
+          <span className="usage-group-label">Run budget</span>
+          <strong>{formatBudgetStatus(latestBudget?.status ?? "unknown")}</strong>
+          <span>{formatCost(latestBudgetTotal)} spent</span>
+          <span>
+            {latestBudgetRemaining === null
+              ? "No limit"
+              : `${formatCost(latestBudgetRemaining)} remaining`}
+          </span>
+        </div>
+        <div className="budget-meter" aria-label="Latest run budget usage">
+          <span style={{ width: `${latestBudgetPercent}%` }} />
+        </div>
+      </div>
       <div className="usage-row">
         <div className="usage-group" title="Aggregated usage for this session">
           <span className="usage-group-label">Session</span>
