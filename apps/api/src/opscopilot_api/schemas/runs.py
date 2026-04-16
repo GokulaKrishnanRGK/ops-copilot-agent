@@ -15,6 +15,9 @@ class BudgetMetricsResponse(BaseModel):
     total_usd: float
     delta_usd: float
     event_count: int
+    max_usd: float | None
+    remaining_usd: float | None
+    status: str
 
 
 class NodeUsageResponse(BaseModel):
@@ -26,10 +29,21 @@ class NodeUsageResponse(BaseModel):
     llm_call_count: int
 
 
+class ModelUsageResponse(BaseModel):
+    provider: str
+    model_id: str
+    tokens_input: int
+    tokens_output: int
+    tokens_total: int
+    cost_usd: float
+    llm_call_count: int
+
+
 class RunMetricsResponse(BaseModel):
     usage: UsageMetricsResponse
     budget: BudgetMetricsResponse
     node_usage: list[NodeUsageResponse]
+    model_usage: list[ModelUsageResponse]
 
 
 class AgentRunResponse(BaseModel):

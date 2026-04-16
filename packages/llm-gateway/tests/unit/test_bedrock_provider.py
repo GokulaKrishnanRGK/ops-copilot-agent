@@ -47,6 +47,10 @@ def test_bedrock_provider_text():
     assert response.tokens_input == 10
     assert response.tokens_output == 5
     assert response.cost_usd == 0.001
+    assert response.provider_metadata == {
+        "provider": "bedrock",
+        "model": "anthropic.claude-3-sonnet",
+    }
 
 
 def test_bedrock_provider_json_schema():
@@ -108,3 +112,7 @@ def test_bedrock_provider_stream():
     assert response.tokens_input == 8
     assert response.tokens_output == 3
     assert response.cost_usd == 0.0005
+    assert response.provider_metadata == {
+        "provider": "bedrock",
+        "model": "anthropic.claude-3-sonnet",
+    }

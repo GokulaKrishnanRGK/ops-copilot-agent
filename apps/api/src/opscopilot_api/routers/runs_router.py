@@ -6,6 +6,7 @@ from opscopilot_api.schemas.runs import (
     AgentRunListResponse,
     AgentRunResponse,
     BudgetMetricsResponse,
+    ModelUsageResponse,
     NodeUsageResponse,
     RunMetricsResponse,
     SessionMetricsResponse,
@@ -60,6 +61,9 @@ def list_runs(
                         total_usd=run_metrics.budget.total_usd,
                         delta_usd=run_metrics.budget.delta_usd,
                         event_count=run_metrics.budget.event_count,
+                        max_usd=run_metrics.budget.max_usd,
+                        remaining_usd=run_metrics.budget.remaining_usd,
+                        status=run_metrics.budget.status,
                     ),
                     node_usage=[
                         NodeUsageResponse(
@@ -71,6 +75,18 @@ def list_runs(
                             llm_call_count=node.llm_call_count,
                         )
                         for node in run_metrics.node_usage
+                    ],
+                    model_usage=[
+                        ModelUsageResponse(
+                            provider=model.provider,
+                            model_id=model.model_id,
+                            tokens_input=model.tokens_input,
+                            tokens_output=model.tokens_output,
+                            tokens_total=model.tokens_total,
+                            cost_usd=model.cost_usd,
+                            llm_call_count=model.llm_call_count,
+                        )
+                        for model in run_metrics.model_usage
                     ],
                 ),
             )
@@ -89,6 +105,9 @@ def list_runs(
                 total_usd=session_metrics.budget.total_usd,
                 delta_usd=session_metrics.budget.delta_usd,
                 event_count=session_metrics.budget.event_count,
+                max_usd=session_metrics.budget.max_usd,
+                remaining_usd=session_metrics.budget.remaining_usd,
+                status=session_metrics.budget.status,
             ),
             run_count=session_metrics.run_count,
         ),

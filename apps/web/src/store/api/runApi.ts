@@ -18,6 +18,9 @@ const EMPTY_BUDGET = {
   total_usd: 0,
   delta_usd: 0,
   event_count: 0,
+  max_usd: null,
+  remaining_usd: null,
+  status: "unknown",
 };
 
 const EMPTY_SESSION_METRICS: SessionMetrics = {

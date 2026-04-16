@@ -76,7 +76,7 @@ class BedrockProvider:
             tokens_output=tokens_output,
             cost_usd=_extract_cost(response),
             latency_ms=latency_ms,
-            provider_metadata={"model": request.model_id},
+            provider_metadata={"provider": "bedrock", "model": request.model_id},
             error=None,
         )
 
@@ -119,6 +119,6 @@ class BedrockProvider:
             tokens_output=tokens_output,
             cost_usd=float(cost_usd),
             latency_ms=latency_ms,
-            provider_metadata={"model": request.model_id},
+            provider_metadata={"provider": "bedrock", "model": request.model_id},
             error=None,
         )

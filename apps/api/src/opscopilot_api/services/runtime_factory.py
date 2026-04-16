@@ -43,7 +43,8 @@ def _read_budget() -> float:
 class RuntimeFactory:
     def create(self, recorder: AgentRunRecorder) -> AgentRuntime:
         provider = BedrockProvider()
-        budget = BudgetEnforcer(BudgetState(max_usd=_read_budget(), total_usd=0.0))
+        budget_max_usd = _read_budget()
+        budget = BudgetEnforcer(BudgetState(max_usd=budget_max_usd, total_usd=0.0))
         ledger = CostLedger()
         client = MCPClient.from_env()
         graph = AgentGraph(
@@ -61,4 +62,4 @@ class RuntimeFactory:
             max_llm_calls=_read_int("AGENT_MAX_LLM_CALLS", 10),
             max_execution_time_ms=_read_int("AGENT_MAX_EXECUTION_TIME_MS", 30_000),
         )
-        return AgentRuntime(graph=graph, limits=limits, recorder=recorder)
+        return AgentRuntime(graph=graph, limits=limits, recorder=recorder, budget_max_usd=budget_max_usd)

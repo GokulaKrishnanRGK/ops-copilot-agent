@@ -34,6 +34,9 @@ export type BudgetMetrics = {
   total_usd: number;
   delta_usd: number;
   event_count: number;
+  max_usd: number | null;
+  remaining_usd: number | null;
+  status: string;
 };
 
 export type NodeUsage = {
@@ -45,10 +48,21 @@ export type NodeUsage = {
   llm_call_count: number;
 };
 
+export type ModelUsage = {
+  provider: string;
+  model_id: string;
+  tokens_input: number;
+  tokens_output: number;
+  tokens_total: number;
+  cost_usd: number;
+  llm_call_count: number;
+};
+
 export type RunMetrics = {
   usage: UsageMetrics;
   budget: BudgetMetrics;
   node_usage: NodeUsage[];
+  model_usage: ModelUsage[];
 };
 
 export type Run = {

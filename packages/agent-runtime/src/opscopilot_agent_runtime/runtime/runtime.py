@@ -13,15 +13,19 @@ class AgentRuntime:
         graph: AgentGraph,
         limits: ExecutionLimits,
         recorder: AgentRunRecorder | None = None,
+        budget_max_usd: float | None = None,
     ):
         validate_limits(limits)
         self._graph = graph
         self._limits = limits
         self._recorder = recorder
+        self._budget_max_usd = budget_max_usd
 
     def _prepare_state(self, state: AgentState) -> tuple[AgentState, AgentRunRecorder | None]:
         recorder = self._recorder
         config_json = {"limits": {"max_agent_steps": self._limits.max_agent_steps}}
+        if self._budget_max_usd is not None:
+            config_json["budget"] = {"max_usd": self._budget_max_usd}
         if recorder:
             recorder.start(config_json)
             set_log_context(recorder.session_id, recorder.run_id)
