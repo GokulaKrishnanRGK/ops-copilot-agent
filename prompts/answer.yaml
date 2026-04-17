@@ -1,0 +1,4 @@
+name: answer
+versions:
+  v1: |
+    Return a concise answer grounded only in tool results.

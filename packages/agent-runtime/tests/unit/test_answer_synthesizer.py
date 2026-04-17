@@ -21,6 +21,13 @@ class FakeRecorder:
         self.budget_events += 1
 
 
+class FakePromptSource:
+    def get(self, name: str, version: str) -> str:
+        assert name == "answer"
+        assert version == "test"
+        return "Prompt loaded from source."
+
+
 def _mock_litellm_response(content: str):
     resp = MagicMock()
     resp.choices = [MagicMock()]
@@ -33,7 +40,7 @@ def _mock_litellm_response(content: str):
     return resp
 
 
-def _synthesizer(recorder=None):
+def _synthesizer(recorder=None, prompt_source=None, prompt_version="v1"):
     provider = BedrockProvider()
     budget = BudgetEnforcer(BudgetState(max_usd=1.0, total_usd=0.0))
     ledger = CostLedger()
@@ -43,6 +50,8 @@ def _synthesizer(recorder=None):
         budget=budget,
         ledger=ledger,
         recorder=recorder,
+        prompt_source=prompt_source,
+        prompt_version=prompt_version,
     )
 
 
@@ -62,3 +71,13 @@ def test_answer_synthesizer_records_calls():
 
     assert recorder.llm_calls == 1
     assert recorder.budget_events == 1
+
+
+def test_answer_synthesizer_uses_prompt_source():
+    with patch("litellm.completion", return_value=_mock_litellm_response(json.dumps({"answer": "ok"}))) as completion:
+        synthesizer = _synthesizer(prompt_source=FakePromptSource(), prompt_version="test")
+        synthesizer.synthesize("status", [])
+
+    messages = completion.call_args.kwargs["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"].startswith("Prompt loaded from source.")

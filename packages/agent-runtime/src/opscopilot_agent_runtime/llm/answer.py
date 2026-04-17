@@ -16,6 +16,7 @@ from opscopilot_llm_gateway.types import (
 )
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
 
 from .base import LlmNodeBase
 
@@ -78,9 +79,13 @@ class AnswerSynthesizer(LlmNodeBase):
         budget: BudgetEnforcer,
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
+        prompt_source: PromptSource | None = None,
+        prompt_version: str = "v1",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
+        self._prompt_source = prompt_source or LocalYamlPromptSource()
+        self._prompt_version = prompt_version
 
     @staticmethod
     def from_env(
@@ -90,7 +95,15 @@ class AnswerSynthesizer(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
     ) -> "AnswerSynthesizer":
         model_id = _read_env("LLM_MODEL_ID")
-        return AnswerSynthesizer(provider, model_id, budget, ledger, recorder=recorder)
+        prompt_version = os.getenv("ANSWER_PROMPT_VERSION", "v1")
+        return AnswerSynthesizer(
+            provider,
+            model_id,
+            budget,
+            ledger,
+            recorder=recorder,
+            prompt_version=prompt_version,
+        )
 
     def synthesize(
         self,
@@ -100,7 +113,7 @@ class AnswerSynthesizer(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
         on_delta: Callable[[str], None] | None = None,
     ) -> str:
-        system_prompt = "Return a concise answer grounded only in tool results."
+        system_prompt = self._prompt_source.get("answer", self._prompt_version)
         context_block = f"\n\nContext:\n{rag_context}" if rag_context else ""
         user_content = (
             f"Prompt: {prompt}{context_block}\n\nTool results:\n{_tool_summary(tool_results)}"
