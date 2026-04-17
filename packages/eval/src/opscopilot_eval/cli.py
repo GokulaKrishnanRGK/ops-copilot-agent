@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from opscopilot_eval.datasets import LocalJsonlDatasetStore
+from opscopilot_eval.datasets import dataset_store_from_env
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -21,7 +21,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def run(args: argparse.Namespace) -> int:
-    store = LocalJsonlDatasetStore(args.datasets_dir)
+    store = dataset_store_from_env(datasets_dir=args.datasets_dir)
     if args.command == "list":
         for name in store.list_datasets():
             print(name)
