@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
+from opscopilot_llm_gateway.types import LlmPromptRef
 
 
 class PromptSource(Protocol):
@@ -68,13 +69,25 @@ class LangfusePromptSource:
         host: str | None = None,
     ) -> None:
         self._client = client or self._create_client(public_key, secret_key, host)
+        self._prompt_cache: dict[tuple[str, str], Any] = {}
 
     def get(self, name: str, version: str) -> str:
         prompt = self._client.get_prompt(name, type="text", **_version_kwargs(version))
+        self._prompt_cache[(name, version)] = prompt
         compiled = prompt.compile()
         if not isinstance(compiled, str) or not compiled.strip():
             raise RuntimeError(f"langfuse prompt did not compile to text: {name}@{version}")
         return compiled.strip()
+
+    def ref(self, name: str, version: str) -> LlmPromptRef:
+        prompt = self._prompt_cache.get((name, version))
+        langfuse_version = getattr(prompt, "version", None)
+        return LlmPromptRef(
+            name=name,
+            version=version,
+            source="langfuse",
+            langfuse_version=str(langfuse_version) if langfuse_version is not None else None,
+        )
 
     def _create_client(
         self,
@@ -110,6 +123,15 @@ def prompt_source_from_env(client: Any | None = None) -> PromptSource:
             host=host,
         )
     return LocalYamlPromptSource()
+
+
+def prompt_ref_for(source: PromptSource, name: str, version: str) -> LlmPromptRef:
+    ref = getattr(source, "ref", None)
+    if callable(ref):
+        return ref(name, version)
+    if isinstance(source, LocalYamlPromptSource):
+        return LlmPromptRef(name=name, version=version, source="local")
+    return LlmPromptRef(name=name, version=version, source=source.__class__.__name__)
 
 
 def load_local_prompt_definitions(prompts_dir: str | Path | None = None) -> list[PromptDefinition]:

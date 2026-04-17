@@ -4,6 +4,7 @@ from opscopilot_agent_runtime.prompts import (
     LangfusePromptSource,
     LocalYamlPromptSource,
     load_local_prompt_definitions,
+    prompt_ref_for,
     prompt_source_from_env,
     push_prompts_to_langfuse,
 )
@@ -48,8 +49,9 @@ def test_local_yaml_prompt_source_rejects_invalid_prompt_file(tmp_path):
 
 
 class FakeLangfusePrompt:
-    def __init__(self, text: str):
+    def __init__(self, text: str, version: int = 7):
         self._text = text
+        self.version = version
 
     def compile(self) -> str:
         return self._text
@@ -72,6 +74,7 @@ def test_langfuse_prompt_source_fetches_yaml_version_label():
 
     assert prompt == "Prompt from Langfuse."
     assert client.calls == [("answer", {"type": "text", "label": "v1"})]
+    assert prompt_ref_for(source, "answer", "v1").langfuse_version == "7"
 
 
 def test_langfuse_prompt_source_fetches_numeric_version():

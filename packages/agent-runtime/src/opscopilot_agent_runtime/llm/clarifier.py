@@ -12,7 +12,7 @@ from opscopilot_llm_gateway.types import LlmMessage, LlmRequest, LlmResponseForm
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.llm.base import LlmNodeBase
-from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -119,6 +119,7 @@ class LlmClarifier(LlmNodeBase):
             max_tokens=256,
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="clarifier", agent_run_id="clarifier", agent_node="clarifier"),
+            prompt_ref=prompt_ref_for(self._prompt_source, "clarifier", self._prompt_version),
         )
         response = self._call(
             request=request,
@@ -165,6 +166,7 @@ class LlmClarifier(LlmNodeBase):
             max_tokens=128,
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="clarifier", agent_run_id="clarifier", agent_node="clarifier_question"),
+            prompt_ref=prompt_ref_for(self._prompt_source, "clarifier_question", self._prompt_version),
         )
         response = self._call(
             request=request,

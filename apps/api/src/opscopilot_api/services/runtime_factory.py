@@ -1,4 +1,6 @@
 import os
+import random
+from collections.abc import Callable
 
 from opscopilot_agent_runtime import (
     AgentGraph,
@@ -43,7 +45,38 @@ def _read_budget() -> float:
         raise RuntimeError("LLM_MAX_BUDGET_USD must be a number") from exc
 
 
+def _read_sample_rate() -> float:
+    value = os.getenv("EVAL_SAMPLE_RATE", "0.1")
+    try:
+        sample_rate = float(value)
+    except ValueError as exc:
+        raise RuntimeError("EVAL_SAMPLE_RATE must be a number") from exc
+    if sample_rate < 0 or sample_rate > 1:
+        raise RuntimeError("EVAL_SAMPLE_RATE must be between 0 and 1")
+    return sample_rate
+
+
+class SampledAnswerScorer:
+    def __init__(
+        self,
+        scorer: Callable,
+        sample_rate: float,
+        random_value: Callable[[], float] = random.random,
+    ) -> None:
+        self._scorer = scorer
+        self._sample_rate = sample_rate
+        self._random_value = random_value
+
+    def __call__(self, state) -> None:
+        if self._random_value() >= self._sample_rate:
+            return
+        self._scorer(state)
+
+
 def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledger: CostLedger):
+    sample_rate = _read_sample_rate()
+    if sample_rate == 0:
+        return None
     if not os.getenv("LANGFUSE_HOST"):
         return None
     langfuse = configure_langfuse()
@@ -65,23 +98,34 @@ def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledg
 
     def score_state(state):
         recorder = state.recorder
+        session_id = recorder.session_id if recorder else "eval"
+        run_id = recorder.run_id if recorder else "eval"
+        langfuse.propagate_attributes(
+            session_id=session_id,
+            metadata={"agent_run_id": run_id},
+            tags=["online_eval"],
+        )
         if judge_scorer is not None:
             judge_scorer.score(
                 prompt=state.prompt or "",
                 answer=state.answer or "",
                 tool_results=state.tool_results or [],
                 rag_context=state.rag.text if state.rag else None,
-                session_id=recorder.session_id if recorder else "eval",
-                run_id=recorder.run_id if recorder else "eval",
+                session_id=session_id,
+                run_id=run_id,
+                trace_id=state.langfuse_trace_id,
             )
         if ragas_scorer is not None and state.rag is not None:
             ragas_scorer.score(
                 prompt=state.prompt or "",
                 answer=state.answer or "",
                 contexts=[result.text for result in state.rag.results],
+                session_id=session_id,
+                run_id=run_id,
+                trace_id=state.langfuse_trace_id,
             )
 
-    return score_state
+    return SampledAnswerScorer(score_state, sample_rate)
 
 
 class RuntimeFactory:

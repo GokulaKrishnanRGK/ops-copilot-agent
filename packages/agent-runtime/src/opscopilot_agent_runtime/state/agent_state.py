@@ -32,6 +32,7 @@ class AgentState:
     stream_callback: Callable[[str], None] | None = None
     llm_stream_callback: Callable[[str, str], None] | None = None
     recorder: AgentRunRecorder | None = None
+    langfuse_trace_id: str | None = None
     event: AgentEvent | None = None
     error: dict | None = None
 
@@ -56,6 +57,7 @@ class AgentState:
             "stream_callback": self.stream_callback,
             "llm_stream_callback": self.llm_stream_callback,
             "recorder": self.recorder,
+            "langfuse_trace_id": self.langfuse_trace_id,
             "event": self.event,
             "error": self.error,
         }
@@ -79,6 +81,7 @@ class AgentState:
             stream_callback=payload.get("stream_callback"),
             llm_stream_callback=payload.get("llm_stream_callback"),
             recorder=payload.get("recorder"),
+            langfuse_trace_id=payload.get("langfuse_trace_id"),
             event=payload.get("event"),
             error=payload.get("error"),
         )

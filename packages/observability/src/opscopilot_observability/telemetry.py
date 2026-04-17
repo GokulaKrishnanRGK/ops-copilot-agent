@@ -39,6 +39,18 @@ class LangfuseAdapter(Protocol):
     ) -> None:
         ...
 
+    def create_score(
+        self,
+        *,
+        name: str,
+        value: float,
+        trace_id: str | None = None,
+        session_id: str | None = None,
+        comment: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        ...
+
     def propagate_attributes(
         self,
         *,
@@ -60,6 +72,18 @@ class NoOpLangfuseAdapter:
         *,
         name: str,
         value: float,
+        comment: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        return None
+
+    def create_score(
+        self,
+        *,
+        name: str,
+        value: float,
+        trace_id: str | None = None,
+        session_id: str | None = None,
         comment: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -111,6 +135,26 @@ class HttpLangfuseAdapter:
             user_id=user_id,
             metadata=metadata,
             tags=tags,
+        )
+
+    def create_score(
+        self,
+        *,
+        name: str,
+        value: float,
+        trace_id: str | None = None,
+        session_id: str | None = None,
+        comment: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self.client.create_score(
+            name=name,
+            value=value,
+            trace_id=trace_id,
+            session_id=session_id,
+            comment=comment,
+            metadata=metadata,
+            data_type="NUMERIC",
         )
 
     def flush(self) -> None:

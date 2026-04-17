@@ -27,6 +27,14 @@ class LlmTags:
 
 
 @dataclass(frozen=True)
+class LlmPromptRef:
+    name: str
+    version: str
+    source: str
+    langfuse_version: str | None = None
+
+
+@dataclass(frozen=True)
 class LlmRequest:
     model_id: str
     messages: list[LlmMessage]
@@ -35,6 +43,7 @@ class LlmRequest:
     max_tokens: int
     idempotency_key: str
     tags: LlmTags
+    prompt_ref: LlmPromptRef | None = None
 
 
 @dataclass(frozen=True)

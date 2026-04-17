@@ -114,6 +114,9 @@ def test_configure_langfuse_returns_http_adapter(monkeypatch) -> None:
         def propagate_attributes(self, **kwargs) -> None:
             created["attributes"] = kwargs
 
+        def create_score(self, **kwargs) -> None:
+            created["created_score"] = kwargs
+
         def flush(self) -> None:
             created["flushed"] = True
 
@@ -139,9 +142,12 @@ def test_configure_langfuse_returns_http_adapter(monkeypatch) -> None:
     assert created["host"] == "http://localhost:3001"
 
     adapter.score_current_trace(name="quality", value=1.0)
+    adapter.create_score(name="quality", value=1.0, trace_id="trace-1", session_id="session-1")
     adapter.propagate_attributes(session_id="s1", tags=["demo"])
     adapter.flush()
 
     assert created["score"]["name"] == "quality"
+    assert created["created_score"]["trace_id"] == "trace-1"
+    assert created["created_score"]["session_id"] == "session-1"
     assert created["attributes"]["session_id"] == "s1"
     assert created["flushed"] is True

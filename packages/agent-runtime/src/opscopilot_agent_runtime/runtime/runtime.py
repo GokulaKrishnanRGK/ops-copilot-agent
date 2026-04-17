@@ -2,6 +2,7 @@ from threading import Thread
 from typing import Callable
 
 from langgraph.errors import GraphRecursionError
+from opentelemetry import trace
 
 from opscopilot_agent_runtime.graph import AgentGraph
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
@@ -89,7 +90,11 @@ class AgentRuntime:
     def _score_answer(self, state: AgentState) -> None:
         if self._answer_scorer is None or not state.answer:
             return
-        Thread(target=self._run_answer_scorer, args=(state,), daemon=True).start()
+        context = trace.get_current_span().get_span_context()
+        scored_state = state
+        if context.is_valid:
+            scored_state = state.merge(langfuse_trace_id=trace.format_trace_id(context.trace_id))
+        Thread(target=self._run_answer_scorer, args=(scored_state,), daemon=True).start()
 
     def _run_answer_scorer(self, state: AgentState) -> None:
         if self._answer_scorer is None:

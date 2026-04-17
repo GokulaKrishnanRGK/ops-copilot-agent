@@ -11,7 +11,7 @@ from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 from opscopilot_llm_gateway.types import LlmMessage, LlmRequest, LlmResponseFormat, LlmTags
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
-from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 
 from .base import LlmNodeBase
 
@@ -96,6 +96,7 @@ class ScopeClassifier(LlmNodeBase):
             max_tokens=128,
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="scope", agent_run_id="scope", agent_node="scope"),
+            prompt_ref=prompt_ref_for(self._prompt_source, "scope", self._prompt_version),
         )
         response = self._call(
             request=request,

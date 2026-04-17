@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-eval test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-eval install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest prompts-push run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-eval test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-eval install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest prompts-push eval-dataset-push eval-langfuse-run run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -163,6 +163,16 @@ prompts-push:
 	@if [ -x .venv/bin/python ]; then PYTHON_BIN=".venv/bin/python"; else PYTHON_BIN="python"; fi; \
 	set -a; [ ! -f .env ] || . ./.env; set +a; \
 	PYTHONPATH=packages/agent-runtime/src $$PYTHON_BIN -m opscopilot_agent_runtime.cli.prompts --prompts-dir prompts
+
+eval-dataset-push:
+	@if [ -x .venv/bin/python ]; then PYTHON_BIN=".venv/bin/python"; else PYTHON_BIN="python"; fi; \
+	set -a; [ ! -f .env ] || . ./.env; set +a; \
+	PYTHONPATH=packages/eval/src $$PYTHON_BIN -m opscopilot_eval.cli push-dataset --dataset $${EVAL_DATASET_NAME:-ops-copilot-v1} --datasets-dir $${EVAL_DATASETS_DIR:-packages/eval/datasets}
+
+eval-langfuse-run:
+	@if [ -x .venv/bin/python ]; then PYTHON_BIN=".venv/bin/python"; else PYTHON_BIN="python"; fi; \
+	set -a; [ ! -f .env ] || . ./.env; set +a; \
+	PYTHONPATH=packages/eval/src $$PYTHON_BIN -m opscopilot_eval.cli run-langfuse --dataset $${EVAL_DATASET_NAME:-ops-copilot-v1} --prompt-version $${LANGFUSE_PROMPT_VERSION:-local} --model $${EVAL_MODEL_ID:-$${LLM_MODEL_ID:-local}}
 
 run-api:
 	cd apps/api && uvicorn opscopilot_api.main:app --host 0.0.0.0 --port $${API_PORT:-8000} --reload

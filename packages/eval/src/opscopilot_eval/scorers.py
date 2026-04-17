@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass
 from importlib import import_module
@@ -56,6 +57,7 @@ class LlmJudgeScorer:
         rag_context: str | None = None,
         session_id: str = "eval",
         run_id: str = "eval",
+        trace_id: str | None = None,
     ) -> JudgeScore:
         request = LlmRequest(
             model_id=self._model_id,
@@ -101,17 +103,21 @@ class LlmJudgeScorer:
             groundedness=_read_score(payload, "groundedness"),
             comment=payload.get("comment") if isinstance(payload.get("comment"), str) else None,
         )
-        self._langfuse.score_current_trace(
+        self._langfuse.create_score(
             name="answer_relevance",
             value=score.relevance,
+            trace_id=trace_id,
+            session_id=session_id,
             comment=score.comment,
-            metadata={"agent_node": "llm_judge"},
+            metadata={"agent_node": "llm_judge", "agent_run_id": run_id},
         )
-        self._langfuse.score_current_trace(
+        self._langfuse.create_score(
             name="answer_groundedness",
             value=score.groundedness,
+            trace_id=trace_id,
+            session_id=session_id,
             comment=score.comment,
-            metadata={"agent_node": "llm_judge"},
+            metadata={"agent_node": "llm_judge", "agent_run_id": run_id},
         )
         self._langfuse.flush()
         return score
@@ -124,8 +130,8 @@ class RagasScorer:
         answer_relevance_metric: Any | None = None,
         langfuse: LangfuseAdapter | None = None,
     ) -> None:
-        self._faithfulness_metric = faithfulness_metric or _build_ragas_metric("Faithfulness")
-        self._answer_relevance_metric = answer_relevance_metric or _build_ragas_metric("AnswerRelevancy")
+        self._faithfulness_metric = faithfulness_metric
+        self._answer_relevance_metric = answer_relevance_metric
         self._langfuse = langfuse
 
     def score(
@@ -133,6 +139,9 @@ class RagasScorer:
         prompt: str,
         answer: str,
         contexts: list[str],
+        session_id: str = "eval",
+        run_id: str = "eval",
+        trace_id: str | None = None,
     ) -> RagasScore | None:
         clean_contexts = [context for context in contexts if context.strip()]
         if not clean_contexts:
@@ -143,20 +152,26 @@ class RagasScorer:
             "response": answer,
             "retrieved_contexts": clean_contexts,
         }
+        faithfulness_metric = self._faithfulness_metric or _build_ragas_metric("Faithfulness")
+        answer_relevance_metric = self._answer_relevance_metric or _build_ragas_metric("AnswerRelevancy")
         score = RagasScore(
-            faithfulness=_read_ragas_score(_run_metric(self._faithfulness_metric, payload)),
-            answer_relevance=_read_ragas_score(_run_metric(self._answer_relevance_metric, payload)),
+            faithfulness=_read_ragas_score(_run_metric(faithfulness_metric, payload)),
+            answer_relevance=_read_ragas_score(_run_metric(answer_relevance_metric, payload)),
         )
         if self._langfuse is not None:
-            self._langfuse.score_current_trace(
+            self._langfuse.create_score(
                 name="rag_faithfulness",
                 value=score.faithfulness,
-                metadata={"agent_node": "ragas"},
+                trace_id=trace_id,
+                session_id=session_id,
+                metadata={"agent_node": "ragas", "agent_run_id": run_id},
             )
-            self._langfuse.score_current_trace(
+            self._langfuse.create_score(
                 name="rag_answer_relevance",
                 value=score.answer_relevance,
-                metadata={"agent_node": "ragas"},
+                trace_id=trace_id,
+                session_id=session_id,
+                metadata={"agent_node": "ragas", "agent_run_id": run_id},
             )
             self._langfuse.flush()
         return score
@@ -187,7 +202,93 @@ def _read_score(payload: dict, key: str) -> float:
 def _build_ragas_metric(name: str) -> Any:
     module = import_module("ragas.metrics.collections")
     metric_class = getattr(module, name)
-    return metric_class()
+    llm = _build_ragas_llm()
+    if name == "AnswerRelevancy":
+        return metric_class(llm=llm, embeddings=_build_ragas_embeddings())
+    return metric_class(llm=llm)
+
+
+def _build_ragas_llm() -> Any:
+    provider = os.getenv("RAGAS_LLM_PROVIDER", "openai")
+    model = os.getenv("RAGAS_LLM_MODEL") or os.getenv("LLM_MODEL_ID") or "gpt-4o-mini"
+    if provider == "bedrock":
+        llm_factory = getattr(import_module("ragas.llms"), "llm_factory")
+        return llm_factory(
+            _litellm_model_name(provider, model),
+            provider=provider,
+            client=_build_litellm_router(model),
+            adapter="litellm",
+        )
+    if provider != "openai":
+        raise RuntimeError("RAGAS_LLM_PROVIDER currently supports openai or bedrock")
+    api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("RAGAS_OPENAI_API_KEY or OPENAI_API_KEY is required for RAGAS scoring")
+    client_class = getattr(import_module("openai"), "AsyncOpenAI")
+    llm_factory = getattr(import_module("ragas.llms"), "llm_factory")
+    return llm_factory(model, provider=provider, client=client_class(api_key=api_key))
+
+
+def _build_ragas_embeddings() -> Any:
+    provider = os.getenv("RAGAS_EMBEDDING_PROVIDER", "openai")
+    model = os.getenv("RAGAS_EMBEDDING_MODEL") or _default_embedding_model(provider)
+    if provider == "bedrock":
+        embeddings_class = getattr(import_module("ragas.embeddings"), "LiteLLMEmbeddings")
+        return embeddings_class(model=_litellm_model_name(provider, model), **_bedrock_litellm_params())
+    if provider != "openai":
+        raise RuntimeError("RAGAS_EMBEDDING_PROVIDER currently supports openai or bedrock")
+    api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("RAGAS_OPENAI_API_KEY or OPENAI_API_KEY is required for RAGAS scoring")
+    client_class = getattr(import_module("openai"), "AsyncOpenAI")
+    embedding_factory = getattr(import_module("ragas.embeddings.base"), "embedding_factory")
+    return embedding_factory(provider, model=model, client=client_class(api_key=api_key))
+
+
+def _build_litellm_router(model: str) -> Any:
+    router_class = getattr(import_module("litellm"), "Router")
+    model_name = _litellm_model_name("bedrock", model)
+    return router_class(
+        model_list=[
+            {
+                "model_name": model_name,
+                "litellm_params": {
+                    "model": model_name,
+                    **_bedrock_litellm_params(),
+                },
+            }
+        ]
+    )
+
+
+def _bedrock_litellm_params() -> dict[str, str]:
+    region = os.getenv("RAGAS_BEDROCK_REGION") or os.getenv("BEDROCK_REGION") or os.getenv("AWS_REGION")
+    if not region:
+        raise RuntimeError("RAGAS_BEDROCK_REGION, BEDROCK_REGION, or AWS_REGION is required for Bedrock RAGAS scoring")
+    params = {"aws_region_name": region}
+    optional_env = {
+        "aws_access_key_id": "AWS_ACCESS_KEY_ID",
+        "aws_secret_access_key": "AWS_SECRET_ACCESS_KEY",
+        "aws_session_token": "AWS_SESSION_TOKEN",
+        "aws_profile_name": "AWS_PROFILE",
+    }
+    for key, env_name in optional_env.items():
+        value = os.getenv(env_name)
+        if value:
+            params[key] = value
+    return params
+
+
+def _litellm_model_name(provider: str, model: str) -> str:
+    if model.startswith(f"{provider}/"):
+        return model
+    return f"{provider}/{model}"
+
+
+def _default_embedding_model(provider: str) -> str:
+    if provider == "bedrock":
+        return os.getenv("BEDROCK_EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v1")
+    return os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 
 
 def _run_metric(metric: Any, payload: dict) -> Any:

@@ -18,7 +18,7 @@ from opscopilot_llm_gateway.types import (
 from typing import TYPE_CHECKING
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
-from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 
 from .base import LlmNodeBase
 
@@ -112,6 +112,7 @@ class LlmPlanner(LlmNodeBase):
             max_tokens=256,
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="planner", agent_run_id="planner", agent_node="planner"),
+            prompt_ref=prompt_ref_for(self._prompt_source, "planner", self._prompt_version),
         )
         response = self._call(
             request=request,

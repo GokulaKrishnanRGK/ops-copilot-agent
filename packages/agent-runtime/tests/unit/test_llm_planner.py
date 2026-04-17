@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from opscopilot_agent_runtime.llm.base import _node_span_name
 from opscopilot_agent_runtime.llm.planner import LlmPlanner
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_llm_gateway.accounting import CostLedger
@@ -75,3 +76,8 @@ def test_llm_planner_records_calls():
 
     assert recorder.llm_calls == 1
     assert recorder.budget_events == 1
+
+
+def test_node_span_name_includes_agent_node():
+    assert _node_span_name("planner") == "llm.node.planner"
+    assert _node_span_name("clarifier question") == "llm.node.clarifier_question"

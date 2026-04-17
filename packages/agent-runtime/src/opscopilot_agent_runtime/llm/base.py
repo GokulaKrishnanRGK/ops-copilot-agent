@@ -14,6 +14,14 @@ from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.logging import get_logger
 
 
+def _span_safe(value: str) -> str:
+    return "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value)
+
+
+def _node_span_name(agent_node: str) -> str:
+    return f"llm.node.{_span_safe(agent_node)}"
+
+
 class LlmNodeBase:
     def __init__(
         self,
@@ -52,7 +60,7 @@ class LlmNodeBase:
                 ),
             )
         logger = get_logger(__name__)
-        with self._tracer.start_as_current_span("llm.node.call") as span:
+        with self._tracer.start_as_current_span(_node_span_name(agent_node)) as span:
             span.set_attribute("model_id", effective_request.model_id)
             span.set_attribute("agent_node", agent_node)
             span.set_attribute("session_id", effective_request.tags.session_id)

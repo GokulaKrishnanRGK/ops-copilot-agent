@@ -93,9 +93,12 @@ class BedrockProvider:
         chunks: list[str] = []
         tokens_input = 0
         tokens_output = 0
+        first_token_latency_ms: int | None = None
         for chunk in stream:
             delta = chunk.choices[0].delta.content if chunk.choices else None
             if delta:
+                if first_token_latency_ms is None:
+                    first_token_latency_ms = int((time.monotonic() - start) * 1000)
                 chunks.append(delta)
                 on_delta(delta)
             usage = getattr(chunk, "usage", None)
@@ -119,6 +122,10 @@ class BedrockProvider:
             tokens_output=tokens_output,
             cost_usd=float(cost_usd),
             latency_ms=latency_ms,
-            provider_metadata={"provider": "bedrock", "model": request.model_id},
+            provider_metadata={
+                "provider": "bedrock",
+                "model": request.model_id,
+                "time_to_first_token_ms": first_token_latency_ms,
+            },
             error=None,
         )
