@@ -5,7 +5,7 @@ from .datasets import (
     S3DatasetStore,
     dataset_store_from_env,
 )
-from .scorers import JudgeScore, LlmJudgeScorer
+from .scorers import JudgeScore, LlmJudgeScorer, RagasScore, RagasScorer
 
 __all__ = [
     "DatasetStore",
@@ -15,4 +15,6 @@ __all__ = [
     "dataset_store_from_env",
     "JudgeScore",
     "LlmJudgeScorer",
+    "RagasScore",
+    "RagasScorer",
 ]

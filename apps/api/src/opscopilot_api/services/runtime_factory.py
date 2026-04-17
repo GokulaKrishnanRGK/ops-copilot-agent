@@ -18,7 +18,7 @@ from opscopilot_agent_runtime import (
     prompt_source_from_env,
 )
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
-from opscopilot_eval import LlmJudgeScorer
+from opscopilot_eval import LlmJudgeScorer, RagasScorer
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
 from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
@@ -46,27 +46,40 @@ def _read_budget() -> float:
 def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledger: CostLedger):
     if not os.getenv("LANGFUSE_HOST"):
         return None
-    if os.getenv("EVAL_LLM_JUDGE_ENABLED", "1") == "0":
+    langfuse = configure_langfuse()
+    judge_scorer = None
+    ragas_scorer = None
+    if os.getenv("EVAL_LLM_JUDGE_ENABLED", "1") != "0":
+        model_id = os.getenv("EVAL_JUDGE_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+        judge_scorer = LlmJudgeScorer(
+            provider=provider,
+            model_id=model_id,
+            budget=budget,
+            ledger=ledger,
+            langfuse=langfuse,
+        )
+    if os.getenv("EVAL_RAGAS_ENABLED", "1") != "0":
+        ragas_scorer = RagasScorer(langfuse=langfuse)
+    if judge_scorer is None and ragas_scorer is None:
         return None
-    model_id = os.getenv("EVAL_JUDGE_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
-    scorer = LlmJudgeScorer(
-        provider=provider,
-        model_id=model_id,
-        budget=budget,
-        ledger=ledger,
-        langfuse=configure_langfuse(),
-    )
 
     def score_state(state):
         recorder = state.recorder
-        scorer.score(
-            prompt=state.prompt or "",
-            answer=state.answer or "",
-            tool_results=state.tool_results or [],
-            rag_context=state.rag.text if state.rag else None,
-            session_id=recorder.session_id if recorder else "eval",
-            run_id=recorder.run_id if recorder else "eval",
-        )
+        if judge_scorer is not None:
+            judge_scorer.score(
+                prompt=state.prompt or "",
+                answer=state.answer or "",
+                tool_results=state.tool_results or [],
+                rag_context=state.rag.text if state.rag else None,
+                session_id=recorder.session_id if recorder else "eval",
+                run_id=recorder.run_id if recorder else "eval",
+            )
+        if ragas_scorer is not None and state.rag is not None:
+            ragas_scorer.score(
+                prompt=state.prompt or "",
+                answer=state.answer or "",
+                contexts=[result.text for result in state.rag.results],
+            )
 
     return score_state
 

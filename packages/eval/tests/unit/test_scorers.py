@@ -1,4 +1,4 @@
-from opscopilot_eval.scorers import LlmJudgeScorer
+from opscopilot_eval.scorers import LlmJudgeScorer, RagasScorer
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
 from opscopilot_llm_gateway.types import LlmOutput, LlmResponse
@@ -96,3 +96,62 @@ def test_llm_judge_scorer_rejects_invalid_scores():
         assert "relevance" in str(exc)
     else:
         raise AssertionError("expected invalid relevance score to fail")
+
+
+class FakeRagasMetric:
+    def __init__(self, value):
+        self.calls = []
+        self._value = value
+
+    async def ascore(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeRagasResult(self._value)
+
+
+class FakeRagasResult:
+    def __init__(self, value):
+        self.value = value
+
+
+def test_ragas_scorer_scores_and_attaches_langfuse_scores():
+    faithfulness = FakeRagasMetric(0.8)
+    answer_relevance = FakeRagasMetric(0.7)
+    langfuse = FakeLangfuse()
+    scorer = RagasScorer(
+        faithfulness_metric=faithfulness,
+        answer_relevance_metric=answer_relevance,
+        langfuse=langfuse,
+    )
+
+    result = scorer.score(
+        prompt="What is Ops Copilot?",
+        answer="Ops Copilot diagnoses Kubernetes issues.",
+        contexts=["Ops Copilot is a Kubernetes diagnostic assistant."],
+    )
+
+    assert result.faithfulness == 0.8
+    assert result.answer_relevance == 0.7
+    assert faithfulness.calls == [
+        {
+            "user_input": "What is Ops Copilot?",
+            "response": "Ops Copilot diagnoses Kubernetes issues.",
+            "retrieved_contexts": ["Ops Copilot is a Kubernetes diagnostic assistant."],
+        }
+    ]
+    assert [score["name"] for score in langfuse.scores] == [
+        "rag_faithfulness",
+        "rag_answer_relevance",
+    ]
+    assert [score["value"] for score in langfuse.scores] == [0.8, 0.7]
+
+
+def test_ragas_scorer_skips_empty_contexts():
+    scorer = RagasScorer(
+        faithfulness_metric=FakeRagasMetric(0.8),
+        answer_relevance_metric=FakeRagasMetric(0.7),
+        langfuse=FakeLangfuse(),
+    )
+
+    result = scorer.score(prompt="p", answer="a", contexts=[])
+
+    assert result is None

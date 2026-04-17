@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import uuid
 from dataclasses import dataclass
+from importlib import import_module
 from typing import Any
 
 from opscopilot_llm_gateway.accounting import CostLedger
@@ -23,6 +25,12 @@ class JudgeScore:
     relevance: float
     groundedness: float
     comment: str | None = None
+
+
+@dataclass(frozen=True)
+class RagasScore:
+    faithfulness: float
+    answer_relevance: float
 
 
 class LlmJudgeScorer:
@@ -109,6 +117,51 @@ class LlmJudgeScorer:
         return score
 
 
+class RagasScorer:
+    def __init__(
+        self,
+        faithfulness_metric: Any | None = None,
+        answer_relevance_metric: Any | None = None,
+        langfuse: LangfuseAdapter | None = None,
+    ) -> None:
+        self._faithfulness_metric = faithfulness_metric or _build_ragas_metric("Faithfulness")
+        self._answer_relevance_metric = answer_relevance_metric or _build_ragas_metric("AnswerRelevancy")
+        self._langfuse = langfuse
+
+    def score(
+        self,
+        prompt: str,
+        answer: str,
+        contexts: list[str],
+    ) -> RagasScore | None:
+        clean_contexts = [context for context in contexts if context.strip()]
+        if not clean_contexts:
+            return None
+
+        payload = {
+            "user_input": prompt,
+            "response": answer,
+            "retrieved_contexts": clean_contexts,
+        }
+        score = RagasScore(
+            faithfulness=_read_ragas_score(_run_metric(self._faithfulness_metric, payload)),
+            answer_relevance=_read_ragas_score(_run_metric(self._answer_relevance_metric, payload)),
+        )
+        if self._langfuse is not None:
+            self._langfuse.score_current_trace(
+                name="rag_faithfulness",
+                value=score.faithfulness,
+                metadata={"agent_node": "ragas"},
+            )
+            self._langfuse.score_current_trace(
+                name="rag_answer_relevance",
+                value=score.answer_relevance,
+                metadata={"agent_node": "ragas"},
+            )
+            self._langfuse.flush()
+        return score
+
+
 def _judge_schema() -> dict:
     return {
         "type": "object",
@@ -128,4 +181,24 @@ def _read_score(payload: dict, key: str) -> float:
     score = float(value)
     if score < 1 or score > 5:
         raise ValueError(f"{key} score must be between 1 and 5")
+    return score
+
+
+def _build_ragas_metric(name: str) -> Any:
+    module = import_module("ragas.metrics.collections")
+    metric_class = getattr(module, name)
+    return metric_class()
+
+
+def _run_metric(metric: Any, payload: dict) -> Any:
+    return asyncio.run(metric.ascore(**payload))
+
+
+def _read_ragas_score(result: Any) -> float:
+    value = getattr(result, "value", result)
+    if not isinstance(value, int | float):
+        raise ValueError("ragas score must be numeric")
+    score = float(value)
+    if score < 0 or score > 1:
+        raise ValueError("ragas score must be between 0 and 1")
     return score
