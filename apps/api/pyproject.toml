@@ -17,6 +17,7 @@ dependencies = [
     "ops-copilot-observability",
     "ops-copilot-db",
     "ops-copilot-agent-runtime",
+    "ops-copilot-eval",
     "pytest>=8",
 ]
 

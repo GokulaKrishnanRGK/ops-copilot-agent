@@ -1,9 +1,12 @@
+from threading import Thread
+from typing import Callable
+
 from langgraph.errors import GraphRecursionError
 
 from opscopilot_agent_runtime.graph import AgentGraph
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.limits import ExecutionLimits, validate_limits
-from opscopilot_agent_runtime.runtime.logging import clear_log_context, set_log_context
+from opscopilot_agent_runtime.runtime.logging import clear_log_context, get_logger, set_log_context
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -14,12 +17,14 @@ class AgentRuntime:
         limits: ExecutionLimits,
         recorder: AgentRunRecorder | None = None,
         budget_max_usd: float | None = None,
+        answer_scorer: Callable[[AgentState], None] | None = None,
     ):
         validate_limits(limits)
         self._graph = graph
         self._limits = limits
         self._recorder = recorder
         self._budget_max_usd = budget_max_usd
+        self._answer_scorer = answer_scorer
 
     def _prepare_state(self, state: AgentState) -> tuple[AgentState, AgentRunRecorder | None]:
         recorder = self._recorder
@@ -61,6 +66,8 @@ class AgentRuntime:
                 yield final_state
             if recorder:
                 recorder.finish("completed")
+            if final_state is not None:
+                self._score_answer(final_state)
             if final_state is None:
                 yield state_with_recorder
         except GraphRecursionError as exc:
@@ -78,3 +85,16 @@ class AgentRuntime:
             raise
         finally:
             clear_log_context()
+
+    def _score_answer(self, state: AgentState) -> None:
+        if self._answer_scorer is None or not state.answer:
+            return
+        Thread(target=self._run_answer_scorer, args=(state,), daemon=True).start()
+
+    def _run_answer_scorer(self, state: AgentState) -> None:
+        if self._answer_scorer is None:
+            return
+        try:
+            self._answer_scorer(state)
+        except Exception as exc:
+            get_logger(__name__).info("answer scoring skipped: %s", exc)

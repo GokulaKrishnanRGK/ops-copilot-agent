@@ -5,6 +5,7 @@ from .datasets import (
     S3DatasetStore,
     dataset_store_from_env,
 )
+from .scorers import JudgeScore, LlmJudgeScorer
 
 __all__ = [
     "DatasetStore",
@@ -12,4 +13,6 @@ __all__ = [
     "LocalJsonlDatasetStore",
     "S3DatasetStore",
     "dataset_store_from_env",
+    "JudgeScore",
+    "LlmJudgeScorer",
 ]

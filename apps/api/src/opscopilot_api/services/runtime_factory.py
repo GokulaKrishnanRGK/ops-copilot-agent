@@ -18,9 +18,11 @@ from opscopilot_agent_runtime import (
     prompt_source_from_env,
 )
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
+from opscopilot_eval import LlmJudgeScorer
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
 from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
+from opscopilot_observability import configure_langfuse
 
 
 def _read_int(name: str, default_value: int) -> int:
@@ -39,6 +41,34 @@ def _read_budget() -> float:
         return float(value)
     except ValueError as exc:
         raise RuntimeError("LLM_MAX_BUDGET_USD must be a number") from exc
+
+
+def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledger: CostLedger):
+    if not os.getenv("LANGFUSE_HOST"):
+        return None
+    if os.getenv("EVAL_LLM_JUDGE_ENABLED", "1") == "0":
+        return None
+    model_id = os.getenv("EVAL_JUDGE_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+    scorer = LlmJudgeScorer(
+        provider=provider,
+        model_id=model_id,
+        budget=budget,
+        ledger=ledger,
+        langfuse=configure_langfuse(),
+    )
+
+    def score_state(state):
+        recorder = state.recorder
+        scorer.score(
+            prompt=state.prompt or "",
+            answer=state.answer or "",
+            tool_results=state.tool_results or [],
+            rag_context=state.rag.text if state.rag else None,
+            session_id=recorder.session_id if recorder else "eval",
+            run_id=recorder.run_id if recorder else "eval",
+        )
+
+    return score_state
 
 
 class RuntimeFactory:
@@ -95,4 +125,10 @@ class RuntimeFactory:
             max_llm_calls=_read_int("AGENT_MAX_LLM_CALLS", 10),
             max_execution_time_ms=_read_int("AGENT_MAX_EXECUTION_TIME_MS", 30_000),
         )
-        return AgentRuntime(graph=graph, limits=limits, recorder=recorder, budget_max_usd=budget_max_usd)
+        return AgentRuntime(
+            graph=graph,
+            limits=limits,
+            recorder=recorder,
+            budget_max_usd=budget_max_usd,
+            answer_scorer=_build_answer_scorer(provider, budget, ledger),
+        )
