@@ -3,7 +3,9 @@ import pytest
 from opscopilot_agent_runtime.prompts import (
     LangfusePromptSource,
     LocalYamlPromptSource,
+    load_local_prompt_definitions,
     prompt_source_from_env,
+    push_prompts_to_langfuse,
 )
 
 
@@ -62,11 +64,21 @@ class FakeLangfuseClient:
         return FakeLangfusePrompt("Prompt from Langfuse.")
 
 
-def test_langfuse_prompt_source_fetches_numeric_version():
+def test_langfuse_prompt_source_fetches_yaml_version_label():
     client = FakeLangfuseClient()
     source = LangfusePromptSource(client=client)
 
     prompt = source.get("answer", "v1")
+
+    assert prompt == "Prompt from Langfuse."
+    assert client.calls == [("answer", {"type": "text", "label": "v1"})]
+
+
+def test_langfuse_prompt_source_fetches_numeric_version():
+    client = FakeLangfuseClient()
+    source = LangfusePromptSource(client=client)
+
+    prompt = source.get("answer", "1")
 
     assert prompt == "Prompt from Langfuse."
     assert client.calls == [("answer", {"type": "text", "version": 1})]
@@ -100,3 +112,49 @@ def test_prompt_source_from_env_returns_langfuse_when_configured(monkeypatch):
     source = prompt_source_from_env(client=FakeLangfuseClient())
 
     assert isinstance(source, LangfusePromptSource)
+
+
+def test_load_local_prompt_definitions_reads_all_versions(tmp_path):
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "answer.yaml").write_text(
+        "name: answer\nversions:\n  v1: |\n    Base answer.\n  v1_stream: |\n    Stream answer.\n",
+        encoding="utf-8",
+    )
+
+    definitions = load_local_prompt_definitions(prompts_dir)
+
+    assert [(item.name, item.version, item.text) for item in definitions] == [
+        ("answer", "v1", "Base answer."),
+        ("answer", "v1_stream", "Stream answer."),
+    ]
+
+
+class FakeLangfusePushClient:
+    def __init__(self):
+        self.created = []
+
+    def create_prompt(self, **kwargs):
+        self.created.append(kwargs)
+
+
+def test_push_prompts_to_langfuse_creates_text_prompts(tmp_path):
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "scope.yaml").write_text(
+        "name: scope\nversions:\n  v1: |\n    Scope prompt.\n",
+        encoding="utf-8",
+    )
+    client = FakeLangfusePushClient()
+
+    pushed = push_prompts_to_langfuse(client=client, prompts_dir=prompts_dir)
+
+    assert pushed == 1
+    assert client.created == [
+        {
+            "name": "scope",
+            "type": "text",
+            "prompt": "Scope prompt.",
+            "labels": ["v1"],
+        }
+    ]

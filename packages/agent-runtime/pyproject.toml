@@ -14,8 +14,12 @@ dependencies = [
     "ops-copilot-db",
     "ops-copilot-llm-gateway",
     "ops-copilot-rag",
+    "langfuse>=4.0",
     "pyyaml>=6.0",
 ]
+
+[project.scripts]
+opscopilot-prompts-push = "opscopilot_agent_runtime.cli.prompts:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
