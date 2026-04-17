@@ -1,0 +1,4 @@
+name: clarifier_question
+versions:
+  v1: |
+    Write one concise clarification question for the user in natural English. Ask specifically for what is missing so execution can continue. Do not mention internal tool names, schema names, or implementation details.

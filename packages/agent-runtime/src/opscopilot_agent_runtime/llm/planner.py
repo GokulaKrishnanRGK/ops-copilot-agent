@@ -18,6 +18,7 @@ from opscopilot_llm_gateway.types import (
 from typing import TYPE_CHECKING
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
 
 from .base import LlmNodeBase
 
@@ -61,9 +62,13 @@ class LlmPlanner(LlmNodeBase):
         budget: BudgetEnforcer,
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
+        prompt_source: PromptSource | None = None,
+        prompt_version: str = "v1",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
+        self._prompt_source = prompt_source or LocalYamlPromptSource()
+        self._prompt_version = prompt_version
 
     @staticmethod
     def from_env(
@@ -73,7 +78,15 @@ class LlmPlanner(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
     ) -> "LlmPlanner":
         model_id = _read_env("LLM_MODEL_ID")
-        return LlmPlanner(provider, model_id, budget, ledger, recorder=recorder)
+        prompt_version = os.getenv("PLANNER_PROMPT_VERSION", "v1")
+        return LlmPlanner(
+            provider,
+            model_id,
+            budget,
+            ledger,
+            recorder=recorder,
+            prompt_version=prompt_version,
+        )
 
     def plan(
         self,
@@ -82,14 +95,7 @@ class LlmPlanner(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
         on_delta: Callable[[str], None] | None = None,
     ) -> Plan:
-        system_prompt = (
-            "You are a planning system that returns tool steps as JSON. "
-            "Only use tool names from the provided list. "
-            "Do not include arguments, params, or any fields besides tool_name. "
-            "Each tool_name may appear at most once in steps; deduplicate repeated requests. "
-            "Return only the minimal ordered set of tools needed. "
-            "If no tool is needed, return an empty steps array."
-        )
+        system_prompt = self._prompt_source.get("planner", self._prompt_version)
         request = LlmRequest(
             model_id=self._model_id,
             messages=[

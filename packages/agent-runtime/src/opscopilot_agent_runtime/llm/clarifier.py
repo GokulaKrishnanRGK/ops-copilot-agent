@@ -12,6 +12,7 @@ from opscopilot_llm_gateway.types import LlmMessage, LlmRequest, LlmResponseForm
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.llm.base import LlmNodeBase
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -54,8 +55,12 @@ class LlmClarifier(LlmNodeBase):
         model_id: str,
         budget: BudgetEnforcer,
         ledger: CostLedger,
+        prompt_source: PromptSource | None = None,
+        prompt_version: str = "v1",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
+        self._prompt_source = prompt_source or LocalYamlPromptSource()
+        self._prompt_version = prompt_version
 
     @staticmethod
     def from_env(
@@ -64,7 +69,8 @@ class LlmClarifier(LlmNodeBase):
         ledger: CostLedger,
     ) -> "LlmClarifier":
         model_id = _read_env("LLM_MODEL_ID")
-        return LlmClarifier(provider, model_id, budget, ledger)
+        prompt_version = os.getenv("CLARIFIER_PROMPT_VERSION", "v1")
+        return LlmClarifier(provider, model_id, budget, ledger, prompt_version=prompt_version)
 
     def clarify(
         self,
@@ -82,22 +88,7 @@ class LlmClarifier(LlmNodeBase):
             "tail_lines": state.tail_lines,
         }
         known_args = {key: value for key, value in known_args.items() if value is not None}
-        system_prompt = (
-            "You normalize tool arguments to match the tool schemas exactly. "
-            "Read the user prompt first and extract argument values directly from that prompt. "
-            "Use known_args only as fallback when prompt does not provide a value. "
-            "Never use FAQ/docs/RAG/tool descriptions as source values for arguments. "
-            "Never return null for required arguments. "
-            "If any required argument is missing or unknown, set action=clarify and include "
-            "a missing_fields list naming the missing required fields. "
-            "Only include arguments that exist in the tool's input_schema; do not invent keys. "
-            "Do not guess missing values. "
-            "If prompt text contains namespace (example: 'in default namespace'), do not ask for namespace. "
-            "Clarify only when required fields are missing in both prompt and known_args. "
-            "Do NOT mention internal tool names (such as k8s.*), schema field names "
-            "(such as namespace, pod_name, label_selector, tail_lines, deployment_name), "
-            "or implementation details."
-        )
+        system_prompt = self._prompt_source.get("clarifier", self._prompt_version)
         planned_steps = [{"tool_name": step.tool_name} for step in state.plan.steps]
         request = LlmRequest(
             model_id=self._model_id,
@@ -149,11 +140,7 @@ class LlmClarifier(LlmNodeBase):
             messages=[
                 LlmMessage(
                     role="system",
-                    content=(
-                        "Write one concise clarification question for the user in natural English. "
-                        "Ask specifically for what is missing so execution can continue. "
-                        "Do not mention internal tool names, schema names, or implementation details."
-                    ),
+                    content=self._prompt_source.get("clarifier_question", self._prompt_version),
                 ),
                 LlmMessage(
                     role="user",

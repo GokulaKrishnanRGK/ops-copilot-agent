@@ -119,16 +119,13 @@ class AnswerSynthesizer(LlmNodeBase):
             f"Prompt: {prompt}{context_block}\n\nTool results:\n{_tool_summary(tool_results)}"
         )
         if on_delta is not None:
+            stream_prompt = self._prompt_source.get("answer", f"{self._prompt_version}_stream")
             request = LlmRequest(
                 model_id=self._model_id,
                 messages=[
                     LlmMessage(
                         role="system",
-                        content=(
-                            f"{system_prompt} "
-                            "Return plain text only. "
-                            "Do not quote full logs; summarize them in one short sentence."
-                        ),
+                        content=stream_prompt,
                     ),
                     LlmMessage(role="user", content=user_content),
                 ],
@@ -153,7 +150,7 @@ class AnswerSynthesizer(LlmNodeBase):
             messages=[
                 LlmMessage(
                     role="system",
-                    content=f"{system_prompt} Do not quote full logs; summarize them in one short sentence.",
+                    content=system_prompt,
                 ),
                 LlmMessage(role="user", content=user_content),
             ],

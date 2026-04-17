@@ -1,4 +1,6 @@
 name: answer
 versions:
   v1: |
-    Return a concise answer grounded only in tool results.
+    Return a concise answer grounded only in tool results. Do not quote full logs; summarize them in one short sentence.
+  v1_stream: |
+    Return a concise answer grounded only in tool results. Return plain text only. Do not quote full logs; summarize them in one short sentence.

@@ -11,6 +11,7 @@ from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 from opscopilot_llm_gateway.types import LlmMessage, LlmRequest, LlmResponseFormat, LlmTags
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
+from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource
 
 from .base import LlmNodeBase
 
@@ -41,9 +42,13 @@ class ScopeClassifier(LlmNodeBase):
         budget: BudgetEnforcer,
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
+        prompt_source: PromptSource | None = None,
+        prompt_version: str = "v1",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
+        self._prompt_source = prompt_source or LocalYamlPromptSource()
+        self._prompt_version = prompt_version
 
     @staticmethod
     def from_env(
@@ -53,7 +58,15 @@ class ScopeClassifier(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
     ) -> "ScopeClassifier":
         model_id = _read_env("LLM_MODEL_ID")
-        return ScopeClassifier(provider, model_id, budget, ledger, recorder=recorder)
+        prompt_version = os.getenv("SCOPE_PROMPT_VERSION", "v1")
+        return ScopeClassifier(
+            provider,
+            model_id,
+            budget,
+            ledger,
+            recorder=recorder,
+            prompt_version=prompt_version,
+        )
 
     def classify(
         self,
@@ -63,16 +76,7 @@ class ScopeClassifier(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
         on_delta: Callable[[str], None] | None = None,
     ) -> dict:
-        system_prompt = (
-            "You are a strict scope guard for an agent that can answer using tools "
-            "or using retrieved knowledge base context when provided. "
-            "If the prompt is not about the available tools and no relevant context is provided, "
-            "set allowed=false and provide a short response explaining it only handles tool-based "
-            "or knowledge-base requests. "
-            "Use rag_context only to determine if the topic is in scope. "
-            "Do not infer concrete runtime facts or resource names from rag_context. "
-            "Keep response generic and capability-focused."
-        )
+        system_prompt = self._prompt_source.get("scope", self._prompt_version)
         payload = {"prompt": prompt, "tools": tool_names}
         if rag_context:
             payload["rag_context"] = rag_context
