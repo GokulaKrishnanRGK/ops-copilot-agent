@@ -15,6 +15,7 @@ from opscopilot_agent_runtime import (
     ScopeClassifier,
     ToolExecutorNode,
     ToolRegistry,
+    prompt_source_from_env,
 )
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_llm_gateway.accounting import CostLedger
@@ -47,13 +48,45 @@ class RuntimeFactory:
         budget = BudgetEnforcer(BudgetState(max_usd=budget_max_usd, total_usd=0.0))
         ledger = CostLedger()
         client = MCPClient.from_env()
+        prompt_source = prompt_source_from_env()
         graph = AgentGraph(
             tool_registry=ToolRegistry(client=client),
-            scope_check=ScopeCheckNode(classifier=ScopeClassifier.from_env(provider=provider, budget=budget, ledger=ledger, recorder=recorder)),
-            planner=PlannerNode(llm_planner=LlmPlanner.from_env(provider=provider, budget=budget, ledger=ledger, recorder=recorder)),
-            clarifier=ClarifierNode(clarifier=LlmClarifier.from_env(provider=provider, budget=budget, ledger=ledger)),
+            scope_check=ScopeCheckNode(
+                classifier=ScopeClassifier.from_env(
+                    provider=provider,
+                    budget=budget,
+                    ledger=ledger,
+                    recorder=recorder,
+                    prompt_source=prompt_source,
+                )
+            ),
+            planner=PlannerNode(
+                llm_planner=LlmPlanner.from_env(
+                    provider=provider,
+                    budget=budget,
+                    ledger=ledger,
+                    recorder=recorder,
+                    prompt_source=prompt_source,
+                )
+            ),
+            clarifier=ClarifierNode(
+                clarifier=LlmClarifier.from_env(
+                    provider=provider,
+                    budget=budget,
+                    ledger=ledger,
+                    prompt_source=prompt_source,
+                )
+            ),
             tool_executor=ToolExecutorNode(client=client, recorder=recorder),
-            answer=AnswerNode(synthesizer=AnswerSynthesizer.from_env(provider=provider, budget=budget, ledger=ledger, recorder=recorder)),
+            answer=AnswerNode(
+                synthesizer=AnswerSynthesizer.from_env(
+                    provider=provider,
+                    budget=budget,
+                    ledger=ledger,
+                    recorder=recorder,
+                    prompt_source=prompt_source,
+                )
+            ),
             critic=None,
         )
         limits = ExecutionLimits(

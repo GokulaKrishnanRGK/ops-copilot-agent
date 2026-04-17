@@ -13,7 +13,7 @@ from .nodes.tool_executor_node import ToolExecutorNode, ToolResult, execute_plan
 from .nodes.scope_check_node import ScopeCheckNode
 from .state import AgentState
 from .persistence import AgentRunRecorder
-from .prompts import LocalYamlPromptSource, PromptSource
+from .prompts import LangfusePromptSource, LocalYamlPromptSource, PromptSource, prompt_source_from_env
 
 __all__ = [
     "AgentGraph",
@@ -44,5 +44,7 @@ __all__ = [
     "ScopeCheckNode",
     "ToolRegistry",
     "LocalYamlPromptSource",
+    "LangfusePromptSource",
     "PromptSource",
+    "prompt_source_from_env",
 ]

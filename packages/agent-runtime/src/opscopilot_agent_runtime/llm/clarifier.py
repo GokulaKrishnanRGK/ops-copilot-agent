@@ -67,10 +67,18 @@ class LlmClarifier(LlmNodeBase):
         provider: BedrockProvider,
         budget: BudgetEnforcer,
         ledger: CostLedger,
+        prompt_source: PromptSource | None = None,
     ) -> "LlmClarifier":
         model_id = _read_env("LLM_MODEL_ID")
         prompt_version = os.getenv("CLARIFIER_PROMPT_VERSION", "v1")
-        return LlmClarifier(provider, model_id, budget, ledger, prompt_version=prompt_version)
+        return LlmClarifier(
+            provider,
+            model_id,
+            budget,
+            ledger,
+            prompt_source=prompt_source,
+            prompt_version=prompt_version,
+        )
 
     def clarify(
         self,

@@ -93,6 +93,7 @@ class AnswerSynthesizer(LlmNodeBase):
         budget: BudgetEnforcer,
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
+        prompt_source: PromptSource | None = None,
     ) -> "AnswerSynthesizer":
         model_id = _read_env("LLM_MODEL_ID")
         prompt_version = os.getenv("ANSWER_PROMPT_VERSION", "v1")
@@ -102,6 +103,7 @@ class AnswerSynthesizer(LlmNodeBase):
             budget,
             ledger,
             recorder=recorder,
+            prompt_source=prompt_source,
             prompt_version=prompt_version,
         )
 

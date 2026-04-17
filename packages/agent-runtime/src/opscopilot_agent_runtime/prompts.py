@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
+from importlib import import_module
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import yaml
 
@@ -48,3 +49,64 @@ class LocalYamlPromptSource:
                 return candidate
 
         return Path("prompts")
+
+
+class LangfusePromptSource:
+    def __init__(
+        self,
+        client: Any | None = None,
+        public_key: str | None = None,
+        secret_key: str | None = None,
+        host: str | None = None,
+    ) -> None:
+        self._client = client or self._create_client(public_key, secret_key, host)
+
+    def get(self, name: str, version: str) -> str:
+        prompt = self._client.get_prompt(name, type="text", **_version_kwargs(version))
+        compiled = prompt.compile()
+        if not isinstance(compiled, str) or not compiled.strip():
+            raise RuntimeError(f"langfuse prompt did not compile to text: {name}@{version}")
+        return compiled.strip()
+
+    def _create_client(
+        self,
+        public_key: str | None,
+        secret_key: str | None,
+        host: str | None,
+    ) -> Any:
+        resolved_host = host or os.getenv("LANGFUSE_HOST")
+        resolved_public_key = public_key or os.getenv("LANGFUSE_PUBLIC_KEY")
+        resolved_secret_key = secret_key or os.getenv("LANGFUSE_SECRET_KEY")
+        if not resolved_host or not resolved_public_key or not resolved_secret_key:
+            raise RuntimeError(
+                "LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, and LANGFUSE_SECRET_KEY are required"
+            )
+        module = import_module("langfuse")
+        client_class = getattr(module, "Langfuse")
+        return client_class(
+            public_key=resolved_public_key,
+            secret_key=resolved_secret_key,
+            host=resolved_host,
+        )
+
+
+def prompt_source_from_env(client: Any | None = None) -> PromptSource:
+    host = os.getenv("LANGFUSE_HOST")
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    if host and public_key and secret_key:
+        return LangfusePromptSource(
+            client=client,
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host,
+        )
+    return LocalYamlPromptSource()
+
+
+def _version_kwargs(version: str) -> dict[str, int | str]:
+    if version.isdigit():
+        return {"version": int(version)}
+    if version.startswith("v") and version[1:].isdigit():
+        return {"version": int(version[1:])}
+    return {"label": version}
