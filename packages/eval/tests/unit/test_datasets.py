@@ -127,3 +127,13 @@ def test_dataset_store_from_env_returns_s3_with_bucket(monkeypatch):
 
     assert isinstance(store, S3DatasetStore)
     assert store.list_datasets() == ["regression", "smoke"]
+
+
+def test_seed_dataset_has_expected_coverage():
+    store = LocalJsonlDatasetStore()
+
+    examples = store.load("ops-copilot-v1")
+
+    assert len(examples) == 30
+    expected = {"tool_action", "knowledge_query", "hybrid", "clarification", "out_of_scope"}
+    assert {example.expected_intent for example in examples} == expected
