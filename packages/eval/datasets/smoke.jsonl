@@ -1,0 +1,1 @@
+{"input":"List pods in the default namespace","expected_intent":"tool_action","expected_answer_contains":["pod"]}

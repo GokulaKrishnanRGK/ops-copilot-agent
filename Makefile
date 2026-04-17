@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest prompts-push run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-eval test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-eval install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest prompts-push run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -39,6 +39,9 @@ test-rag:
 
 test-agent:
 	cd packages/agent-runtime && pytest
+
+test-eval:
+	cd packages/eval && pytest
 
 test-agent-integration:
 	./scripts/run-agent-integration.sh
@@ -97,7 +100,10 @@ install-rag:
 install-agent:
 	cd packages/agent-runtime && pip install -e .
 
-install: install-web install-observability install-api install-tool install-db install-llm install-rag install-agent
+install-eval:
+	cd packages/eval && pip install -e .
+
+install: install-web install-observability install-api install-tool install-db install-llm install-rag install-agent install-eval
 
 opensearch-up:
 	docker compose --env-file .env -f deploy/compose/opensearch.yml up -d
