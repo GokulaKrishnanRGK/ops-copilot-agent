@@ -21,9 +21,10 @@ def _scope_schema() -> dict:
         "type": "object",
         "properties": {
             "allowed": {"type": "boolean"},
+            "is_greeting": {"type": "boolean"},
             "response": {"type": "string"},
         },
-        "required": ["allowed", "response"],
+        "required": ["allowed", "is_greeting", "response"],
     }
 
 
@@ -63,7 +64,7 @@ class ScopeClassifier(LlmNodeBase):
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_scope_schema()),
             temperature=0.0,
-            max_tokens=128,
+            max_tokens=256,
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="scope", agent_run_id="scope", agent_node="scope"),
             prompt_ref=prompt_ref_for(self._prompt_source, "scope", self._prompt_version),

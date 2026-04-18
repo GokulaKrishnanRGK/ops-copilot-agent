@@ -22,10 +22,6 @@ def _embedding_span_name(agent_node: str) -> str:
     return f"llm.gateway.embedding.{_span_safe(agent_node)}"
 
 
-def _trace_content_enabled() -> bool:
-    value = os.getenv("LANGFUSE_TRACE_CONTENT") or os.getenv("TRACELOOP_TRACE_CONTENT")
-    return value is not None and value.lower() in {"1", "true", "yes", "on"}
-
 
 def _messages_payload(request: LlmRequest) -> list[dict[str, str]]:
     return [{"role": message.role, "content": message.content} for message in request.messages]
@@ -44,6 +40,10 @@ def _json_attribute(payload: Any) -> str:
 def _set_generation_attributes(span, request: LlmRequest, response: LlmResponse, cost_usd: float) -> None:
     span.set_attribute("langfuse.observation.type", "generation")
     span.set_attribute("langfuse.observation.model.name", request.model_id)
+    span.set_attribute(
+        "langfuse.observation.model.parameters",
+        _json_attribute({"temperature": request.temperature, "max_tokens": request.max_tokens}),
+    )
     span.set_attribute(
         "langfuse.observation.usage_details",
         _json_attribute(
@@ -67,9 +67,35 @@ def _set_generation_attributes(span, request: LlmRequest, response: LlmResponse,
     first_token_ms = response.provider_metadata.get("time_to_first_token_ms")
     if first_token_ms is not None:
         span.set_attribute("time_to_first_token_ms", int(first_token_ms))
-    if _trace_content_enabled():
-        span.set_attribute("langfuse.observation.input", _json_attribute(_messages_payload(request)))
-        span.set_attribute("langfuse.observation.output", _json_attribute(_output_payload(response)))
+        span.set_attribute("ai.response.msToFirstChunk", int(first_token_ms))
+    span.set_attribute("ai.response.msToFinish", response.latency_ms)
+    if response.tokens_output > 0 and response.latency_ms > 0:
+        tokens_per_sec = round(response.tokens_output / (response.latency_ms / 1000.0), 2)
+        span.set_attribute("ai.response.avgOutputTokensPerSecond", tokens_per_sec)
+    if response.finish_reason:
+        span.set_attribute("ai.response.finishReason", response.finish_reason)
+    span.set_attribute("ai.usage.inputTokens", response.tokens_input)
+    span.set_attribute("ai.usage.outputTokens", response.tokens_output)
+    if response.cache_read_input_tokens > 0:
+        span.set_attribute("ai.usage.inputTokenDetails.cacheReadTokens", response.cache_read_input_tokens)
+    span.set_attribute("langfuse.observation.input", _json_attribute(_messages_payload(request)))
+    span.set_attribute("langfuse.observation.output", _json_attribute(_output_payload(response)))
+    span.set_attribute(
+        "langfuse.observation.metadata",
+        _json_attribute({
+            "agent_node": request.tags.agent_node,
+            "agent_run_id": request.tags.agent_run_id,
+            "provider": "bedrock",
+            "cache_hit": response.cache_hit,
+            "latency_ms": response.latency_ms,
+        }),
+    )
+    env = os.getenv("LANGFUSE_ENVIRONMENT")
+    if env:
+        span.set_attribute("langfuse.environment", env)
+    release = os.getenv("LANGFUSE_RELEASE")
+    if release:
+        span.set_attribute("langfuse.release", release)
 
 
 def run_gateway_call(
@@ -92,7 +118,7 @@ def run_gateway_call(
         span.set_attribute("gen_ai.usage.output_tokens", response.tokens_output)
         span.set_attribute("agent_node", request.tags.agent_node)
         span.set_attribute("cost_usd", cost_usd)
-        span.set_attribute("session_id", request.tags.session_id)
+        span.set_attribute("session.id", request.tags.session_id)
         span.set_attribute("agent_run_id", request.tags.agent_run_id)
         span.set_attribute("latency_ms", response.latency_ms)
         _set_generation_attributes(span, request, response, cost_usd)
@@ -121,6 +147,7 @@ def run_embedding_call(
 ) -> EmbeddingResponse:
     tracer = trace.get_tracer("opscopilot_llm_gateway")
     with tracer.start_as_current_span(_embedding_span_name(request.tags.agent_node)) as span:
+        span.set_attribute("langfuse.observation.type", "generation")
         span.set_attribute("provider", "embedding")
         response = provider.embed(request)
         cost_usd = response.cost_usd
@@ -129,7 +156,7 @@ def run_embedding_call(
         span.set_attribute("gen_ai.usage.output_tokens", 0)
         span.set_attribute("agent_node", request.tags.agent_node)
         span.set_attribute("cost_usd", cost_usd)
-        span.set_attribute("session_id", request.tags.session_id)
+        span.set_attribute("session.id", request.tags.session_id)
         span.set_attribute("agent_run_id", request.tags.agent_run_id)
         span.set_attribute("latency_ms", response.latency_ms)
         if not budget.can_spend(cost_usd):

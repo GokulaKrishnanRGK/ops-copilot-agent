@@ -77,6 +77,7 @@ class LlmResponse:
     error: LlmError | None
     cache_hit: bool = False
     cache_read_input_tokens: int = 0
+    finish_reason: str | None = None
 
 
 @dataclass(frozen=True)

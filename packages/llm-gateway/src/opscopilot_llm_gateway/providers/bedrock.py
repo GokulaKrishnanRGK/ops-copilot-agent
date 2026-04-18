@@ -76,11 +76,13 @@ class BedrockProvider:
             stream=False,
         )
         latency_ms = int((time.monotonic() - start) * 1000)
-        text = response.choices[0].message.content or ""
+        choice = response.choices[0]
+        text = choice.message.content or ""
         usage = response.usage or {}
         tokens_input = getattr(usage, "prompt_tokens", 0) or 0
         tokens_output = getattr(usage, "completion_tokens", 0) or 0
         cache_read_input_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
+        finish_reason = getattr(choice, "finish_reason", None)
         return LlmResponse(
             output=_make_output(text, request.response_format.type == "json_schema"),
             tokens_input=tokens_input,
@@ -91,6 +93,7 @@ class BedrockProvider:
             error=None,
             cache_hit=cache_read_input_tokens > 0,
             cache_read_input_tokens=cache_read_input_tokens,
+            finish_reason=finish_reason,
         )
 
     def invoke_stream(self, request: LlmRequest, on_delta: Callable[[str], None]) -> LlmResponse:
@@ -108,17 +111,25 @@ class BedrockProvider:
         tokens_output = 0
         cache_read_input_tokens = 0
         first_token_latency_ms: int | None = None
+        finish_reason: str | None = None
         for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
+            choice = chunk.choices[0] if chunk.choices else None
+            delta = choice.delta.content if choice else None
             if delta:
                 if first_token_latency_ms is None:
                     first_token_latency_ms = int((time.monotonic() - start) * 1000)
                 chunks.append(delta)
                 on_delta(delta)
+            if choice and getattr(choice, "finish_reason", None):
+                finish_reason = choice.finish_reason
             usage = getattr(chunk, "usage", None)
             if usage:
                 tokens_input = getattr(usage, "prompt_tokens", 0) or 0
-                tokens_output = getattr(usage, "completion_tokens", 0) or 0
+                tokens_output = (
+                    getattr(usage, "completion_tokens", 0)
+                    or getattr(usage, "output_tokens", 0)
+                    or 0
+                )
                 cache_read_input_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
 
         latency_ms = int((time.monotonic() - start) * 1000)
@@ -145,4 +156,5 @@ class BedrockProvider:
             error=None,
             cache_hit=cache_read_input_tokens > 0,
             cache_read_input_tokens=cache_read_input_tokens,
+            finish_reason=finish_reason,
         )

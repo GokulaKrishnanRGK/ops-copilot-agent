@@ -133,7 +133,7 @@ services:
       retries: 20
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3
+    image: langfuse/langfuse-worker:3.173.0
     environment: &langfuse-env
       NEXTAUTH_URL: "${LANGFUSE_NEXTAUTH_URL:-http://localhost:3001}"
       DATABASE_URL: "postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-langfuse}"
@@ -182,7 +182,7 @@ services:
         condition: service_healthy
 
   langfuse-web:
-    image: langfuse/langfuse:3
+    image: langfuse/langfuse:3.173.0
     ports:
       - "3001:3000"
     environment:

@@ -2,6 +2,7 @@ from threading import Thread
 from typing import Callable
 
 from langgraph.errors import GraphRecursionError
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 
 from opscopilot_agent_runtime.graph import AgentGraph
@@ -9,6 +10,7 @@ from opscopilot_agent_runtime.history import HistoryManager, SummaryStore
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.limits import ExecutionLimits, validate_limits
 from opscopilot_agent_runtime.runtime.logging import clear_log_context, get_logger, set_log_context
+from opscopilot_agent_runtime.runtime.tracing import _agent_graph_otel_ctx
 from opscopilot_agent_runtime.state import AgentState
 
 
@@ -110,6 +112,7 @@ class AgentRuntime:
         return last_state
 
     def run_stream(self, state: AgentState):
+        _agent_graph_otel_ctx.set(otel_context.get_current())
         compiled = self._graph.build()
         state_with_recorder, recorder = self._prepare_state(state)
         try:

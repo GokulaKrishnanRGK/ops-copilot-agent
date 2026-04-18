@@ -50,30 +50,42 @@ class RagRetriever:
     return RagRetriever(OpenSearchClient().config, _read_top_k())
 
   def retrieve(self, query: str, recorder: "AgentRunRecorder | None" = None) -> RagContext:
+    import json
     logger = get_logger(__name__)
     tracer = trace.get_tracer("opscopilot_agent_runtime.rag")
     started = time.perf_counter()
-    with tracer.start_as_current_span("rag.retrieve") as span:
-      span.set_attribute("index", self._config.index)
-      span.set_attribute("top_k", self._top_k)
-      span.set_attribute("query_length", len(query))
+    with tracer.start_as_current_span("rag.retriever") as outer_span:
+      outer_span.set_attribute("langfuse.observation.type", "span")
+      outer_span.set_attribute("langfuse.observation.input", json.dumps({"query": query[:500]}))
+      outer_span.set_attribute("index", self._config.index)
+      outer_span.set_attribute("top_k", self._top_k)
+      outer_span.set_attribute("query_length", len(query))
       self._rag_retrieval_requests_total.add(1, {"index": self._config.index})
       if recorder:
-        span.set_attribute("session_id", recorder.session_id)
-        span.set_attribute("agent_run_id", recorder.run_id)
+        outer_span.set_attribute("session.id", recorder.session_id)
+        outer_span.set_attribute("agent_run_id", recorder.run_id)
       logger.info(
           "RAG RETRIEVE query %s index=%s top_k=%d", query, self._config.index,
           self._top_k
       )
-      embeddings = self._adapter.embed(EmbeddingRequest(texts=[query]))
+
+      with tracer.start_as_current_span("rag.embed") as embed_span:
+        embeddings = self._adapter.embed(EmbeddingRequest(texts=[query]))
+        embed_span.set_attribute("langfuse.observation.type", "span")
+        embed_span.set_attribute("model_id", embeddings.model_id)
+
       vector = embeddings.vectors[0]
-      results = retrieve_knn(self._client, self._config.index, vector,
-                             self._top_k)
+      results = retrieve_knn(self._client, self._config.index, vector, self._top_k)
       citations = build_citations(results)
       context_lines = []
       for result in results:
         context_lines.append(f"[{result.source}] {result.text}")
-      span.set_attribute("retrieved_chunks", len(results))
+
+      outer_span.set_attribute("retrieved_chunks", len(results))
+      outer_span.set_attribute(
+          "langfuse.observation.output",
+          json.dumps({"retrieved_chunks": len(results), "index": self._config.index}),
+      )
       self._rag_retrieved_chunks_total.add(len(results), {"index": self._config.index})
       self._rag_retrieval_latency_ms.record(
           (time.perf_counter() - started) * 1000.0,

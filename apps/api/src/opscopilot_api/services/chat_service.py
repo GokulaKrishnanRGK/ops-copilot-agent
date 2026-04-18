@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from collections.abc import Iterable
 from typing import Callable
 from queue import Empty, Queue
+import json
+import os
 import threading
 import time
 import logging
@@ -179,8 +181,19 @@ class ChatService:
         set_log_context(session_id=session_id, agent_run_id=run_id)
         try:
             with self._tracer.start_as_current_span("chat.run") as span:
-                span.set_attribute("session_id", session_id)
+                span.set_attribute("session.id", session_id)
                 span.set_attribute("agent_run_id", run_id)
+                span.set_attribute("langfuse.observation.type", "generation")
+                span.set_attribute("langfuse.observation.input", json.dumps(prompt))
+                span.set_attribute("langfuse.trace.name", "chat")
+                span.set_attribute("langfuse.trace.input", prompt)
+                span.set_attribute("langfuse.trace.tags", '["ops-copilot"]')
+                _lf_env = os.getenv("LANGFUSE_ENVIRONMENT")
+                if _lf_env:
+                    span.set_attribute("langfuse.environment", _lf_env)
+                _lf_release = os.getenv("LANGFUSE_RELEASE")
+                if _lf_release:
+                    span.set_attribute("langfuse.release", _lf_release)
                 self._logger.info("chat run started")
                 self._agent_runs_total.add(1, {"entrypoint": "run"})
                 prompt_history = self._load_prompt_history(session_id)
@@ -243,6 +256,8 @@ class ChatService:
                     )
                 )
 
+                span.set_attribute("langfuse.trace.output", answer_text or "")
+                span.set_attribute("langfuse.observation.output", json.dumps(answer_text or ""))
                 return ChatResult(
                     run_id=run_id,
                     answer=answer_text,
@@ -280,8 +295,19 @@ class ChatService:
             set_log_context(session_id=session_id, agent_run_id=run_id)
             try:
                 with self._tracer.start_as_current_span("chat.run_stream") as span:
-                    span.set_attribute("session_id", session_id)
+                    span.set_attribute("session.id", session_id)
                     span.set_attribute("agent_run_id", run_id)
+                    span.set_attribute("langfuse.observation.type", "generation")
+                    span.set_attribute("langfuse.observation.input", json.dumps(prompt))
+                    span.set_attribute("langfuse.trace.name", "chat")
+                    span.set_attribute("langfuse.trace.input", prompt)
+                    span.set_attribute("langfuse.trace.tags", '["ops-copilot"]')
+                    _lf_env = os.getenv("LANGFUSE_ENVIRONMENT")
+                    if _lf_env:
+                        span.set_attribute("langfuse.environment", _lf_env)
+                    _lf_release = os.getenv("LANGFUSE_RELEASE")
+                    if _lf_release:
+                        span.set_attribute("langfuse.release", _lf_release)
                     self._logger.info("chat stream started")
                     self._agent_runs_total.add(1, {"entrypoint": "run_stream"})
                     yield agent_run_started(session_id, run_id)
@@ -424,6 +450,9 @@ class ChatService:
                                     ),
                                 )
                             )
+                            _final_message = persistence.get("message") or ""
+                            span.set_attribute("langfuse.trace.output", _final_message)
+                            span.set_attribute("langfuse.observation.output", json.dumps(_final_message))
                             for event in events:
                                 yield event
                             break

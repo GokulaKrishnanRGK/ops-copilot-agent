@@ -55,10 +55,15 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
             json.dumps(step.args, default=str),
         )
         with tracer.start_as_current_span("tool.call") as span:
+            span.set_attribute("langfuse.observation.type", "tool")
             span.set_attribute("tool_name", step.tool_name)
             if recorder:
-                span.set_attribute("session_id", recorder.session_id)
+                span.set_attribute("session.id", recorder.session_id)
                 span.set_attribute("agent_run_id", recorder.run_id)
+            span.set_attribute(
+                "langfuse.observation.input",
+                json.dumps({"tool": step.tool_name, "args": step.args}, default=str),
+            )
             response = client.call_tool(
                 step.tool_name,
                 _instrumented_arguments(step.args, recorder),
@@ -75,6 +80,14 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
             tool_call_latency_ms.record(latency_ms, metric_attrs)
             if status != "success":
                 tool_call_errors_total.add(1, {"tool_name": step.tool_name})
+            span.set_attribute(
+                "langfuse.observation.output",
+                json.dumps({"status": status, "result": response.get("structured_content", {})}, default=str),
+            )
+            span.set_attribute(
+                "langfuse.observation.metadata",
+                json.dumps({"step_id": step.step_id, "latency_ms": latency_ms}, default=str),
+            )
         response_str = json.dumps(response, default=str)
         logger.debug(
             "tool_executor result step=%s tool=%s status=%s response_bytes=%d response=%s",

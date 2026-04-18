@@ -43,6 +43,8 @@ def create_app() -> FastAPI:
         with tracer.start_as_current_span(f"{request.method} {request.url.path}") as span:
             span.set_attribute("http.method", request.method)
             span.set_attribute("http.route", request.url.path)
+            if session_id:
+                span.set_attribute("session.id", session_id)
             try:
                 response = await call_next(request)
                 duration_ms = int((time.perf_counter() - start) * 1000)

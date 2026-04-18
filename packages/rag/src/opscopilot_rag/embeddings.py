@@ -81,4 +81,6 @@ class OpenAIEmbeddingAdapter(EmbeddingAdapter):
             vectors=response.vectors,
             model_id=self.model,
             dimensions=dimensions,
+            tokens_input=response.tokens_input,
+            cost_usd=float(response.cost_usd),
         )

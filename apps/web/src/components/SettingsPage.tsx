@@ -114,6 +114,72 @@ function ModelConfigSection({ nodes, errors, onChange }: ModelConfigSectionProps
   );
 }
 
+// ── execution limits section ───────────────────────────────────────────────
+
+type LimitsErrors = {
+  max_agent_steps?: string;
+  max_budget_usd?: string;
+};
+
+function validateLimits(steps: string, budget: string): LimitsErrors {
+  const errors: LimitsErrors = {};
+  const stepsNum = Number(steps);
+  if (!steps.trim() || !Number.isInteger(stepsNum) || stepsNum < 1) {
+    errors.max_agent_steps = "Must be a whole number ≥ 1";
+  }
+  if (budget.trim() !== "" && (isNaN(Number(budget)) || Number(budget) < 0)) {
+    errors.max_budget_usd = "Must be a number ≥ 0, or leave blank for unlimited";
+  }
+  return errors;
+}
+
+type ExecutionLimitsSectionProps = {
+  steps: string;
+  budget: string;
+  errors: LimitsErrors;
+  onStepsChange: (v: string) => void;
+  onBudgetChange: (v: string) => void;
+};
+
+function ExecutionLimitsSection({ steps, budget, errors, onStepsChange, onBudgetChange }: ExecutionLimitsSectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Max Agent Steps</span>
+          <span className="limits-field-unit">steps</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.max_agent_steps ? " settings-input-error" : ""}`}
+            value={steps}
+            onChange={(e: { target: { value: string } }) => onStepsChange(e.target.value)}
+            inputMode="numeric"
+            placeholder="10"
+          />
+          {errors.max_agent_steps && <span className="settings-field-error">{errors.max_agent_steps}</span>}
+        </div>
+      </div>
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Max Budget</span>
+          <span className="limits-field-unit">USD — blank = unlimited</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.max_budget_usd ? " settings-input-error" : ""}`}
+            value={budget}
+            onChange={(e: { target: { value: string } }) => onBudgetChange(e.target.value)}
+            inputMode="decimal"
+            placeholder="unlimited"
+          />
+          {errors.max_budget_usd && <span className="settings-field-error">{errors.max_budget_usd}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── page ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_NODE: NodeConfig = { model_id: "", prompt_version: "latest" };
@@ -132,10 +198,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [draft, setDraft] = useState<SettingsUpdate | null>(null);
   const [nodeErrors, setNodeErrors] = useState<NodeErrors>({});
 
+  const [stepsRaw, setStepsRaw] = useState("");
+  const [budgetRaw, setBudgetRaw] = useState("");
+  const [limitsErrors, setLimitsErrors] = useState<LimitsErrors>({});
+
   useEffect(() => {
     if (data && !draft) {
       const { id: _id, schema_version: _sv, ...editable } = data;
       setDraft(editable);
+      setStepsRaw(String(editable.max_agent_steps));
+      setBudgetRaw(editable.max_budget_usd != null ? String(editable.max_budget_usd) : "");
     }
   }, [data, draft]);
 
@@ -144,6 +216,24 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     const errors = validateNodes(nodes);
     setNodeErrors(errors);
     setDraft({ ...draft, nodes });
+  }
+
+  function handleStepsChange(v: string) {
+    setStepsRaw(v);
+    const errors = validateLimits(v, budgetRaw);
+    setLimitsErrors(errors);
+    if (!errors.max_agent_steps && draft) {
+      setDraft({ ...draft, max_agent_steps: Number(v) });
+    }
+  }
+
+  function handleBudgetChange(v: string) {
+    setBudgetRaw(v);
+    const errors = validateLimits(stepsRaw, v);
+    setLimitsErrors(errors);
+    if (!errors.max_budget_usd && draft) {
+      setDraft({ ...draft, max_budget_usd: v.trim() === "" ? null : Number(v) });
+    }
   }
 
   return (
@@ -186,7 +276,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             <SettingsSection
               title="Execution Limits"
               description="Control the maximum number of steps and per-run budget."
-            />
+            >
+              <ExecutionLimitsSection
+                steps={stepsRaw}
+                budget={budgetRaw}
+                errors={limitsErrors}
+                onStepsChange={handleStepsChange}
+                onBudgetChange={handleBudgetChange}
+              />
+            </SettingsSection>
             <SettingsSection
               title="History & Summarization"
               description="Configure how many conversation turns to keep verbatim before compacting."

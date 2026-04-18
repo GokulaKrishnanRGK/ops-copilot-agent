@@ -3,8 +3,10 @@ from dataclasses import dataclass
 from typing import Callable
 
 from langgraph.graph import END, StateGraph
+from opentelemetry import trace
 
 from opscopilot_agent_runtime.runtime.logging import get_logger
+from opscopilot_agent_runtime.runtime.tracing import _agent_graph_otel_ctx, set_node_observation_attributes
 from opscopilot_agent_runtime.state import AgentState
 from opscopilot_agent_runtime.runtime.tool_registry import ToolRegistry
 
@@ -69,6 +71,7 @@ def _wrap(
     node_name: str = "",
 ) -> Callable[[dict], dict]:
     label = node_name or type(node).__name__
+    tracer = trace.get_tracer("opscopilot_agent_runtime")
 
     def adapter(state_dict: dict) -> dict:
         state = AgentState.from_dict(state_dict)
@@ -80,8 +83,10 @@ def _wrap(
             _state_in_summary(state),
         )
         t0 = time.perf_counter()
-        updated = node(state)
-        elapsed_ms = (time.perf_counter() - t0) * 1000
+        with tracer.start_as_current_span(f"agent.node.{label}", context=_agent_graph_otel_ctx.get()) as span:
+            updated = node(state)
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            set_node_observation_attributes(span, state, updated, label, elapsed_ms)
         _logger.debug(
             "<<< node.exit   node=%s  elapsed_ms=%.1f  %s",
             label,

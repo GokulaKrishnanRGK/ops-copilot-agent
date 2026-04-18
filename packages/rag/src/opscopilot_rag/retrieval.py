@@ -44,7 +44,8 @@ def retrieve_knn(
         len(vector),
     )
     tracer = trace.get_tracer("opscopilot_rag")
-    with tracer.start_as_current_span("rag.opensearch.search") as span:
+    with tracer.start_as_current_span("rag.retrieve") as span:
+        span.set_attribute("langfuse.observation.type", "tool")
         span.set_attribute("index", index_name)
         span.set_attribute("top_k", top_k)
         response = client.search(index=index_name, body=build_knn_query(vector, top_k))

@@ -28,6 +28,8 @@ class EmbeddingResult:
     vectors: list[list[float]]
     model_id: str
     dimensions: int
+    tokens_input: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass(frozen=True)

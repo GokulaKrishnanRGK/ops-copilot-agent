@@ -33,8 +33,17 @@ class ScopeCheckNode:
             on_delta=on_delta,
         )
         allowed = payload.get("allowed", True)
+        is_greeting = payload.get("is_greeting", False)
         response = payload.get("response") or "This request is outside the supported scope."
-        logger.debug("scope_check: result allowed=%s", allowed)
+        logger.debug("scope_check: result allowed=%s is_greeting=%s", allowed, is_greeting)
+        if is_greeting:
+            return state.merge(
+                answer=response,
+                event=AgentEvent(
+                    event_type="scope_check.completed",
+                    payload={"response": response},
+                ),
+            )
         if not allowed:
             return state.merge(
                 answer=response,

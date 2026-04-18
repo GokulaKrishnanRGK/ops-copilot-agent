@@ -13,7 +13,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 
 _configured = False
 
@@ -192,6 +192,51 @@ def _instrument_openllmetry() -> None:
     _instrument_provider("opentelemetry.instrumentation.openai_v2", "OpenAIInstrumentor")
 
 
+class _LangfuseFilteringExporter(SpanExporter):
+    _INCLUDED = frozenset({"chat.run", "chat.run_stream", "tool.call", "rag.retriever", "rag.embed", "rag.retrieve", "get-langfuse-prompt"})
+    _INCLUDED_PREFIXES = ("llm.node.", "agent.node.")
+
+    def __init__(self, wrapped: SpanExporter) -> None:
+        self._wrapped = wrapped
+
+    def _should_export(self, span) -> bool:
+        name = span.name
+        return name in self._INCLUDED or any(name.startswith(p) for p in self._INCLUDED_PREFIXES)
+
+    def export(self, spans):
+        filtered = [s for s in spans if self._should_export(s)]
+        if not filtered:
+            return SpanExportResult.SUCCESS
+        return self._wrapped.export(filtered)
+
+    def shutdown(self):
+        return self._wrapped.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000):
+        return self._wrapped.force_flush(timeout_millis)
+
+
+def _add_langfuse_span_processor(tracer_provider: TracerProvider) -> None:
+    import base64
+
+    langfuse_host = os.getenv("LANGFUSE_HOST")
+    langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    if not (langfuse_host and langfuse_public_key and langfuse_secret_key):
+        return
+    langfuse_endpoint = f"{langfuse_host.rstrip('/')}/api/public/otel/v1/traces"
+    credentials = base64.b64encode(
+        f"{langfuse_public_key}:{langfuse_secret_key}".encode()
+    ).decode()
+    langfuse_exporter = _LangfuseFilteringExporter(
+        OTLPSpanExporter(
+            endpoint=langfuse_endpoint,
+            headers={"Authorization": f"Basic {credentials}"},
+        )
+    )
+    tracer_provider.add_span_processor(BatchSpanProcessor(langfuse_exporter))
+
+
 def configure_telemetry(service_name: str) -> None:
     global _configured
     if _configured:
@@ -214,6 +259,7 @@ def configure_telemetry(service_name: str) -> None:
     tracer_provider = TracerProvider(resource=resource)
     trace_exporter = OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces")
     tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+    _add_langfuse_span_processor(tracer_provider)
     trace.set_tracer_provider(tracer_provider)
 
     metric_exporter = OTLPMetricExporter(endpoint=f"{endpoint.rstrip('/')}/v1/metrics")

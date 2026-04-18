@@ -6,14 +6,15 @@ from opscopilot_agent_runtime.state import AgentState
 
 
 class _FakeClassifier:
-    def __init__(self, allowed: bool = True, response: str = "ok") -> None:
+    def __init__(self, allowed: bool = True, response: str = "ok", is_greeting: bool = False) -> None:
         self.calls: list[dict] = []
         self._allowed = allowed
         self._response = response
+        self._is_greeting = is_greeting
 
     def classify(self, prompt, tool_descriptions, recorder=None, on_delta=None):
         self.calls.append({"prompt": prompt, "tool_descriptions": tool_descriptions})
-        return {"allowed": self._allowed, "response": self._response}
+        return {"allowed": self._allowed, "is_greeting": self._is_greeting, "response": self._response}
 
 
 def _tool(name: str, description: str = "") -> MCPTool:
@@ -124,6 +125,31 @@ def test_scope_check_existing_error_passes_through():
     result = node(state)
     assert result is state
     assert classifier.calls == []
+
+
+def test_scope_check_greeting_returns_answer_without_error():
+    node = ScopeCheckNode(
+        classifier=_FakeClassifier(
+            allowed=False,
+            is_greeting=True,
+            response="Hello! I'm a Kubernetes operations assistant.",
+        )
+    )
+    result = node(AgentState(prompt="hello"))
+
+    assert result.error is None
+    assert result.answer == "Hello! I'm a Kubernetes operations assistant."
+    assert result.event is not None
+    assert result.event.event_type == "scope_check.completed"
+
+
+def test_scope_check_greeting_does_not_emit_rejected_event():
+    node = ScopeCheckNode(
+        classifier=_FakeClassifier(allowed=False, is_greeting=True, response="Hi there!")
+    )
+    result = node(AgentState(prompt="hi"))
+
+    assert result.event.event_type != "scope_check.rejected"
 
 
 def test_scope_check_does_not_perform_rag_retrieval():
