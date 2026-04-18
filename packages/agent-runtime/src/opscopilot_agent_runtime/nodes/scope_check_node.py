@@ -11,16 +11,18 @@ class ScopeCheckNode:
         self._classifier = classifier
 
     def __call__(self, state: AgentState) -> AgentState:
+        logger = get_logger(__name__)
         if state.error:
+            logger.debug("scope_check: skipped existing_error=%s", state.error.get("type"))
             return state
         if self._classifier is None or not state.prompt:
+            logger.debug("scope_check: skipped classifier_present=%s prompt_present=%s", bool(self._classifier), bool(state.prompt))
             return state
-        logger = get_logger(__name__)
-        logger.debug("scope_check: prompt_present=%s", bool(state.prompt))
         tools = state.tools or []
         tool_descriptions = [
             f"{t.name}: {t.description}" if t.description else t.name for t in tools
         ]
+        logger.debug("scope_check: enter prompt_len=%d tool_count=%d", len(state.prompt), len(tools))
         on_delta = None
         if state.llm_stream_callback is not None:
             on_delta = lambda text: state.llm_stream_callback("scope", text)
@@ -32,6 +34,7 @@ class ScopeCheckNode:
         )
         allowed = payload.get("allowed", True)
         response = payload.get("response") or "This request is outside the supported scope."
+        logger.debug("scope_check: result allowed=%s", allowed)
         if not allowed:
             return state.merge(
                 answer=response,

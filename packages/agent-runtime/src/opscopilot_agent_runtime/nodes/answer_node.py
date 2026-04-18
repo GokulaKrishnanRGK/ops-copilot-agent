@@ -4,7 +4,10 @@ import json
 
 from opscopilot_agent_runtime.llm.answer import AnswerSynthesizer
 from opscopilot_agent_runtime.runtime.events import AgentEvent
+from opscopilot_agent_runtime.runtime.logging import get_logger
 from opscopilot_agent_runtime.state import AgentState
+
+_logger = get_logger(__name__)
 
 
 def _read_prompt(state: AgentState) -> str:
@@ -78,6 +81,7 @@ class AnswerNode:
 
     def __call__(self, state: AgentState) -> AgentState:
         if state.error:
+            _logger.debug("answer: skipped existing_error=%s", state.error.get("type"))
             return state
         if self._synthesizer is None:
             raise RuntimeError("answer_synthesizer_missing")
@@ -87,6 +91,8 @@ class AnswerNode:
             if state.rag is None:
                 raise RuntimeError("tool_results required")
             results = []
+        _logger.debug("answer: enter prompt_len=%d tool_results=%d rag_present=%s streaming=%s",
+            len(prompt), len(results), bool(state.rag), bool(state.llm_stream_callback or state.stream_callback))
         llm_results = self._sanitize_tool_results(results)
         on_delta = None
         if state.llm_stream_callback is not None:
@@ -100,6 +106,7 @@ class AnswerNode:
             recorder=state.recorder,
             on_delta=on_delta,
         )
+        _logger.debug("answer: completed answer_len=%d", len(answer))
         return state.merge(
             answer=answer,
             citations=state.rag.citations if state.rag else None,

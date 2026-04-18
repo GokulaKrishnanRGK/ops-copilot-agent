@@ -5,7 +5,10 @@ import uuid
 from opscopilot_agent_runtime.llm.clarifier import LlmClarifier
 from opscopilot_agent_runtime.nodes.planner_node import Plan, PlanStep
 from opscopilot_agent_runtime.runtime.events import AgentEvent
+from opscopilot_agent_runtime.runtime.logging import get_logger
 from opscopilot_agent_runtime.state import AgentState
+
+_logger = get_logger(__name__)
 
 
 def _required_fields(schema: dict | None) -> set[str]:
@@ -32,11 +35,15 @@ class ClarifierNode:
 
     def __call__(self, state: AgentState) -> AgentState:
         if state.error:
+            _logger.debug("clarifier: skipped existing_error=%s", state.error.get("type"))
             return state
         if self._clarifier is None:
+            _logger.debug("clarifier: skipped no_clarifier")
             return state
         if state.plan is None or not state.plan.steps:
+            _logger.debug("clarifier: skipped no_plan")
             return state
+        _logger.debug("clarifier: enter plan_steps=%d prompt_len=%d", len(state.plan.steps), len(state.prompt or ""))
         tools = state.tools or []
         planned_tools = {step.tool_name for step in state.plan.steps} if state.plan else set()
         if planned_tools:
@@ -59,6 +66,7 @@ class ClarifierNode:
         if state.llm_stream_callback is not None:
             on_delta = lambda text: state.llm_stream_callback("clarifier_question", text)
         payload = self._clarifier.clarify(state, tool_payload, on_delta=on_delta)
+        _logger.debug("clarifier: action=%s", payload.get("action"))
         if payload.get("action") == "clarify":
             question = payload.get("clarify_question")
             if not isinstance(question, str) or not question.strip():
@@ -175,6 +183,7 @@ class ClarifierNode:
                         "message": question,
                     }
                 )
+        _logger.debug("clarifier: completed steps=%d", len(steps))
         return state.merge(
             plan=Plan(steps=steps),
             event=AgentEvent(event_type="clarifier.completed", payload={"steps": len(steps)}),

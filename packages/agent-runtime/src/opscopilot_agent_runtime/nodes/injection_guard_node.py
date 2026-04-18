@@ -6,6 +6,8 @@ from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_agent_runtime.runtime.logging import get_logger
 from opscopilot_agent_runtime.state import AgentState
 
+_logger = get_logger(__name__)
+
 _PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"ignore\s+(previous|prior|all)\s+(instructions?|directives?|rules?|context)", re.IGNORECASE),
     re.compile(r"forget\s+(previous|prior|all)\s+(instructions?|directives?|rules?|context)", re.IGNORECASE),
@@ -32,11 +34,12 @@ class PromptInjectionGuard:
 
     def __call__(self, state: AgentState) -> AgentState:
         if state.error or not state.prompt:
+            _logger.debug("injection_guard: skipped error=%s prompt_present=%s", bool(state.error), bool(state.prompt))
             return state
-        logger = get_logger(__name__)
+        _logger.debug("injection_guard: enter prompt_len=%d", len(state.prompt))
         for pattern in self._patterns:
             if pattern.search(state.prompt):
-                logger.warning("injection_guard: blocked pattern=%s", pattern.pattern)
+                _logger.warning("injection_guard: blocked pattern=%s", pattern.pattern)
                 return state.merge(
                     answer=_REJECTION_MESSAGE,
                     event=AgentEvent(
@@ -48,4 +51,5 @@ class PromptInjectionGuard:
                         "message": _REJECTION_MESSAGE,
                     },
                 )
+        _logger.debug("injection_guard: passed pattern_count=%d", len(self._patterns))
         return state
