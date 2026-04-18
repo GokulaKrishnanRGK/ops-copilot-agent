@@ -2,6 +2,7 @@ import { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from "react"
 import { ChatPanel, LiveEvent, RenderMessage } from "./components/ChatPanel";
 import { buildChatTranscript } from "./components/ChatTranscript";
 import { SessionsPanel } from "./components/SessionsPanel";
+import { SettingsPage } from "./components/SettingsPage";
 import { ThemeSelector } from "./components/ThemeSelector";
 import { UsageDetailsModal } from "./components/UsageDetailsModal";
 import { UsageSummary } from "./components/UsageSummary";
@@ -164,6 +165,8 @@ export function App() {
   const [liveEvent, setLiveEvent] = useState<LiveEvent | null>(null);
   const [error, setError] = useState<string>("");
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -792,8 +795,24 @@ export function App() {
           <h1>Ops Copilot</h1>
           <p>Live operations assistant with streaming execution trace</p>
         </div>
-        <ThemeSelector value={themeMode} onChange={setThemeMode} />
+        <div className="masthead-controls">
+          <ThemeSelector value={themeMode} onChange={setThemeMode} />
+          <button
+            type="button"
+            className="settings-gear button-muted"
+            aria-label="Open settings"
+            onClick={() => setActiveView(activeView === "settings" ? "chat" : "settings")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
       </header>
+      {activeView === "settings" ? (
+        <SettingsPage onClose={() => setActiveView("chat")} />
+      ) : (
       <main className="layout">
         <SessionsPanel
           sessions={sessions}
@@ -851,6 +870,7 @@ export function App() {
           }}
         />
       </main>
+      )}
       <UsageDetailsModal
         isOpen={showUsageDetails}
         latestRun={latestRun}
