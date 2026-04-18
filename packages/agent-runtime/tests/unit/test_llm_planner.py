@@ -45,6 +45,7 @@ def _planner(recorder: AgentRunRecorder | None = None):
         budget=budget,
         ledger=ledger,
         recorder=recorder,
+        prompt_version="v1",
     )
 
 

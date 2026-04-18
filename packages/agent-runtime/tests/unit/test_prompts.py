@@ -97,14 +97,13 @@ def test_langfuse_prompt_source_fetches_label_version():
     assert client.calls == [("answer", {"type": "text", "label": "candidate"})]
 
 
-def test_prompt_source_from_env_returns_local_without_langfuse(monkeypatch):
+def test_prompt_source_from_env_raises_without_langfuse(monkeypatch):
     monkeypatch.delenv("LANGFUSE_HOST", raising=False)
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
 
-    source = prompt_source_from_env()
-
-    assert isinstance(source, LocalYamlPromptSource)
+    with pytest.raises(RuntimeError, match="LANGFUSE_HOST"):
+        prompt_source_from_env()
 
 
 def test_prompt_source_from_env_returns_langfuse_when_configured(monkeypatch):

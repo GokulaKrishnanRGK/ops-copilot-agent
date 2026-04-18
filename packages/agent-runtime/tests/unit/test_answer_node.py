@@ -29,6 +29,7 @@ def _node():
         model_id="anthropic.claude-3-sonnet",
         budget=BudgetEnforcer(BudgetState(max_usd=1.0, total_usd=0.0)),
         ledger=CostLedger(),
+        prompt_version="v1",
     )
     return AnswerNode(synthesizer)
 

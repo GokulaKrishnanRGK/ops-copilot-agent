@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from typing import Callable
 
@@ -21,16 +20,10 @@ from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 
 from .base import LlmNodeBase
+from .spotlight import wrap_user_input
 
 if TYPE_CHECKING:
     from opscopilot_agent_runtime.nodes.planner_node import Plan, PlanStep
-
-
-def _read_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"{name} is required")
-    return value
 
 
 def _plan_schema() -> dict:
@@ -63,32 +56,12 @@ class LlmPlanner(LlmNodeBase):
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
-        prompt_version: str = "v1",
+        prompt_version: str = "latest",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
         self._prompt_source = prompt_source or LocalYamlPromptSource()
         self._prompt_version = prompt_version
-
-    @staticmethod
-    def from_env(
-        provider: BedrockProvider,
-        budget: BudgetEnforcer,
-        ledger: CostLedger,
-        recorder: AgentRunRecorder | None = None,
-        prompt_source: PromptSource | None = None,
-    ) -> "LlmPlanner":
-        model_id = _read_env("PLANNER_MODEL_ID")
-        prompt_version = os.getenv("PLANNER_PROMPT_VERSION", "v1")
-        return LlmPlanner(
-            provider,
-            model_id,
-            budget,
-            ledger,
-            recorder=recorder,
-            prompt_source=prompt_source,
-            prompt_version=prompt_version,
-        )
 
     def plan(
         self,
@@ -104,7 +77,7 @@ class LlmPlanner(LlmNodeBase):
                 LlmMessage(role="system", content=system_prompt),
                 LlmMessage(
                     role="user",
-                    content=json.dumps({"prompt": prompt, "tools": tools}),
+                    content=json.dumps({"prompt": wrap_user_input(prompt), "tools": tools}),
                 ),
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_plan_schema()),

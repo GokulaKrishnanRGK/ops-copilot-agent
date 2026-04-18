@@ -40,6 +40,7 @@ Read `docs/PROJECT_STATE.md` and `docs/MILESTONES.md` before every session. Read
 - Do not invent features or requirements not present in project documents.
 - Do not stage or commit any Markdown files under `docs/`.
 - Do not run `git commit` automatically; human approval is required.
+- Do not commit after completing a slice. Produce the Slice Report, then wait for explicit user approval before staging or committing anything. The user will review the code and confirm before the commit and before the next slice begins.
 - TypeScript `any` type is prohibited. Use `unknown` and explicit type guards.
 
 Violating any rule is a protocol failure.

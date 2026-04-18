@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from typing import Callable
 
@@ -12,15 +11,9 @@ from opscopilot_llm_gateway.types import LlmMessage, LlmRequest, LlmResponseForm
 
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.llm.base import LlmNodeBase
+from opscopilot_agent_runtime.llm.spotlight import wrap_user_input
 from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 from opscopilot_agent_runtime.state import AgentState
-
-
-def _read_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"{name} is required")
-    return value
 
 
 def _clarifier_schema() -> dict:
@@ -56,29 +49,11 @@ class LlmClarifier(LlmNodeBase):
         budget: BudgetEnforcer,
         ledger: CostLedger,
         prompt_source: PromptSource | None = None,
-        prompt_version: str = "v1",
+        prompt_version: str = "latest",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._prompt_source = prompt_source or LocalYamlPromptSource()
         self._prompt_version = prompt_version
-
-    @staticmethod
-    def from_env(
-        provider: BedrockProvider,
-        budget: BudgetEnforcer,
-        ledger: CostLedger,
-        prompt_source: PromptSource | None = None,
-    ) -> "LlmClarifier":
-        model_id = _read_env("CLARIFIER_MODEL_ID")
-        prompt_version = os.getenv("CLARIFIER_PROMPT_VERSION", "v1")
-        return LlmClarifier(
-            provider,
-            model_id,
-            budget,
-            ledger,
-            prompt_source=prompt_source,
-            prompt_version=prompt_version,
-        )
 
     def clarify(
         self,
@@ -106,7 +81,7 @@ class LlmClarifier(LlmNodeBase):
                     role="user",
                     content=json.dumps(
                         {
-                            "prompt": state.prompt,
+                            "prompt": wrap_user_input(state.prompt or ""),
                             "known_args": known_args,
                             "plan": {"steps": planned_steps},
                             "tools": tools,
@@ -155,7 +130,7 @@ class LlmClarifier(LlmNodeBase):
                     role="user",
                     content=json.dumps(
                         {
-                            "prompt": prompt,
+                            "prompt": wrap_user_input(prompt),
                             "missing_fields": missing_fields,
                         }
                     ),

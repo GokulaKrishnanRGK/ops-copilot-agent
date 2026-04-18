@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from typing import Callable
 
@@ -19,13 +18,7 @@ from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 
 from .base import LlmNodeBase
-
-
-def _read_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"{name} is required")
-    return value
+from .spotlight import wrap_tool_result, wrap_user_input
 
 
 def _response_schema() -> dict:
@@ -80,32 +73,12 @@ class AnswerSynthesizer(LlmNodeBase):
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
-        prompt_version: str = "v1",
+        prompt_version: str = "latest",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
         self._prompt_source = prompt_source or LocalYamlPromptSource()
         self._prompt_version = prompt_version
-
-    @staticmethod
-    def from_env(
-        provider: BedrockProvider,
-        budget: BudgetEnforcer,
-        ledger: CostLedger,
-        recorder: AgentRunRecorder | None = None,
-        prompt_source: PromptSource | None = None,
-    ) -> "AnswerSynthesizer":
-        model_id = _read_env("ANSWER_MODEL_ID")
-        prompt_version = os.getenv("ANSWER_PROMPT_VERSION", "v1")
-        return AnswerSynthesizer(
-            provider,
-            model_id,
-            budget,
-            ledger,
-            recorder=recorder,
-            prompt_source=prompt_source,
-            prompt_version=prompt_version,
-        )
 
     def synthesize(
         self,
@@ -118,10 +91,10 @@ class AnswerSynthesizer(LlmNodeBase):
         system_prompt = self._prompt_source.get("answer", self._prompt_version)
         context_block = f"\n\nContext:\n{rag_context}" if rag_context else ""
         user_content = (
-            f"Prompt: {prompt}{context_block}\n\nTool results:\n{_tool_summary(tool_results)}"
+            f"Prompt: {wrap_user_input(prompt)}{context_block}\n\nTool results:\n{wrap_tool_result(_tool_summary(tool_results))}"
         )
         if on_delta is not None:
-            stream_prompt = self._prompt_source.get("answer", f"{self._prompt_version}_stream")
+            stream_prompt = self._prompt_source.get("answer_stream", self._prompt_version)
             request = LlmRequest(
                 model_id=self._model_id,
                 messages=[
@@ -138,8 +111,8 @@ class AnswerSynthesizer(LlmNodeBase):
                 tags=LlmTags(session_id="answer", agent_run_id="answer", agent_node="answer"),
                 prompt_ref=prompt_ref_for(
                     self._prompt_source,
-                    "answer",
-                    f"{self._prompt_version}_stream",
+                    "answer_stream",
+                    self._prompt_version,
                 ),
             )
             response = self._call(

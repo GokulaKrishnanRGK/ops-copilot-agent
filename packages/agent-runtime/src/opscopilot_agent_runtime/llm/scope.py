@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from typing import Callable
 
@@ -14,13 +13,7 @@ from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.prompts import LocalYamlPromptSource, PromptSource, prompt_ref_for
 
 from .base import LlmNodeBase
-
-
-def _read_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"{name} is required")
-    return value
+from .spotlight import wrap_user_input
 
 
 def _scope_schema() -> dict:
@@ -43,32 +36,12 @@ class ScopeClassifier(LlmNodeBase):
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
-        prompt_version: str = "v2",
+        prompt_version: str = "latest",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
         self._prompt_source = prompt_source or LocalYamlPromptSource()
         self._prompt_version = prompt_version
-
-    @staticmethod
-    def from_env(
-        provider: BedrockProvider,
-        budget: BudgetEnforcer,
-        ledger: CostLedger,
-        recorder: AgentRunRecorder | None = None,
-        prompt_source: PromptSource | None = None,
-    ) -> "ScopeClassifier":
-        model_id = _read_env("SCOPE_MODEL_ID")
-        prompt_version = os.getenv("SCOPE_PROMPT_VERSION", "v2")
-        return ScopeClassifier(
-            provider,
-            model_id,
-            budget,
-            ledger,
-            recorder=recorder,
-            prompt_source=prompt_source,
-            prompt_version=prompt_version,
-        )
 
     def classify(
         self,
@@ -78,7 +51,7 @@ class ScopeClassifier(LlmNodeBase):
         on_delta: Callable[[str], None] | None = None,
     ) -> dict:
         system_prompt = self._prompt_source.get("scope", self._prompt_version)
-        payload = {"prompt": prompt, "tool_descriptions": tool_descriptions}
+        payload = {"prompt": wrap_user_input(prompt), "tool_descriptions": tool_descriptions}
         request = LlmRequest(
             model_id=self._model_id,
             messages=[

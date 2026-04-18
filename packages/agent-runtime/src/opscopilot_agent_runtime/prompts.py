@@ -115,14 +115,16 @@ def prompt_source_from_env(client: Any | None = None) -> PromptSource:
     host = os.getenv("LANGFUSE_HOST")
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-    if host and public_key and secret_key:
-        return LangfusePromptSource(
-            client=client,
-            public_key=public_key,
-            secret_key=secret_key,
-            host=host,
+    if not (host and public_key and secret_key):
+        raise RuntimeError(
+            "LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, and LANGFUSE_SECRET_KEY are required"
         )
-    return LocalYamlPromptSource()
+    return LangfusePromptSource(
+        client=client,
+        public_key=public_key,
+        secret_key=secret_key,
+        host=host,
+    )
 
 
 def prompt_ref_for(source: PromptSource, name: str, version: str) -> LlmPromptRef:
