@@ -18,6 +18,7 @@ class AgentRuntime:
         limits: ExecutionLimits,
         recorder: AgentRunRecorder | None = None,
         budget_max_usd: float | None = None,
+        runtime_config_id: str | None = None,
         answer_scorer: Callable[[AgentState], None] | None = None,
     ):
         validate_limits(limits)
@@ -25,6 +26,7 @@ class AgentRuntime:
         self._limits = limits
         self._recorder = recorder
         self._budget_max_usd = budget_max_usd
+        self._runtime_config_id = runtime_config_id
         self._answer_scorer = answer_scorer
 
     def _prepare_state(self, state: AgentState) -> tuple[AgentState, AgentRunRecorder | None]:
@@ -33,7 +35,7 @@ class AgentRuntime:
         if self._budget_max_usd is not None:
             config_json["budget"] = {"max_usd": self._budget_max_usd}
         if recorder:
-            recorder.start(config_json)
+            recorder.start(config_json, runtime_config_id=self._runtime_config_id)
             set_log_context(recorder.session_id, recorder.run_id)
         next_state = state
         if state.prompt:

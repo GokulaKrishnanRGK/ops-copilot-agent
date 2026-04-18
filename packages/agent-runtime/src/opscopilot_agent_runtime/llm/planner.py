@@ -78,7 +78,7 @@ class LlmPlanner(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
     ) -> "LlmPlanner":
-        model_id = _read_env("LLM_MODEL_ID")
+        model_id = _read_env("PLANNER_MODEL_ID")
         prompt_version = os.getenv("PLANNER_PROMPT_VERSION", "v1")
         return LlmPlanner(
             provider,

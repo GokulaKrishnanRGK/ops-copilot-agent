@@ -24,11 +24,22 @@ class Message(Base):
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
+class RuntimeConfig(Base):
+    __tablename__ = "runtime_configs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    schema_version: Mapped[str] = mapped_column(String, nullable=False)
+    config_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[str] = mapped_column(DateTime, nullable=False)
+
+
 class AgentRun(Base):
     __tablename__ = "agent_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), nullable=False)
+    runtime_config_id: Mapped[str | None] = mapped_column(ForeignKey("runtime_configs.id"), nullable=True)
     started_at: Mapped[str] = mapped_column(DateTime, nullable=False)
     ended_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)

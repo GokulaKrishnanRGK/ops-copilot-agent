@@ -20,6 +20,7 @@ from opscopilot_agent_runtime import (
     prompt_source_from_env,
 )
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
+from opscopilot_api.config_cache import RuntimeConfigData
 from opscopilot_eval import LlmJudgeScorer, RagasScorer
 from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
@@ -35,14 +36,6 @@ def _read_int(name: str, default_value: int) -> int:
         return int(value)
     except ValueError as exc:
         raise RuntimeError(f"{name} must be an integer") from exc
-
-
-def _read_budget() -> float:
-    value = os.getenv("LLM_MAX_BUDGET_USD", "1.0")
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise RuntimeError("LLM_MAX_BUDGET_USD must be a number") from exc
 
 
 def _read_sample_rate() -> float:
@@ -129,55 +122,68 @@ def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledg
 
 
 class RuntimeFactory:
+    def __init__(self, config: RuntimeConfigData) -> None:
+        self._config = config
+
     def create(self, recorder: AgentRunRecorder) -> AgentRuntime:
+        config = self._config
         provider = BedrockProvider()
-        budget_max_usd = _read_budget()
-        budget = BudgetEnforcer(BudgetState(max_usd=budget_max_usd, total_usd=0.0))
+        budget_max_usd = config.max_budget_usd
+        max_usd = budget_max_usd if budget_max_usd is not None else float("inf")
+        budget = BudgetEnforcer(BudgetState(max_usd=max_usd, total_usd=0.0))
         ledger = CostLedger()
         client = MCPClient.from_env()
         prompt_source = prompt_source_from_env()
         graph = AgentGraph(
             tool_registry=ToolRegistry(client=client),
             scope_check=ScopeCheckNode(
-                classifier=ScopeClassifier.from_env(
+                classifier=ScopeClassifier(
                     provider=provider,
+                    model_id=config.node("scope").model_id,
                     budget=budget,
                     ledger=ledger,
                     recorder=recorder,
                     prompt_source=prompt_source,
+                    prompt_version=config.node("scope").prompt_version,
                 )
             ),
             planner=PlannerNode(
-                llm_planner=LlmPlanner.from_env(
+                llm_planner=LlmPlanner(
                     provider=provider,
+                    model_id=config.node("planner").model_id,
                     budget=budget,
                     ledger=ledger,
                     recorder=recorder,
                     prompt_source=prompt_source,
+                    prompt_version=config.node("planner").prompt_version,
                 )
             ),
             clarifier=ClarifierNode(
-                clarifier=LlmClarifier.from_env(
+                clarifier=LlmClarifier(
                     provider=provider,
+                    model_id=config.node("clarifier").model_id,
                     budget=budget,
                     ledger=ledger,
                     prompt_source=prompt_source,
+                    prompt_version=config.node("clarifier").prompt_version,
                 )
             ),
             tool_executor=ToolExecutorNode(client=client, recorder=recorder),
             answer=AnswerNode(
-                synthesizer=AnswerSynthesizer.from_env(
+                synthesizer=AnswerSynthesizer(
                     provider=provider,
+                    model_id=config.node("answer").model_id,
                     budget=budget,
                     ledger=ledger,
                     recorder=recorder,
                     prompt_source=prompt_source,
+                    prompt_version=config.node("answer").prompt_version,
                 )
             ),
             critic=None,
         )
         limits = ExecutionLimits(
-            max_agent_steps=_read_int("AGENT_MAX_STEPS", 10),
+            max_agent_steps=config.max_agent_steps,
             max_tool_calls=_read_int("AGENT_MAX_TOOL_CALLS", 10),
             max_llm_calls=_read_int("AGENT_MAX_LLM_CALLS", 10),
             max_execution_time_ms=_read_int("AGENT_MAX_EXECUTION_TIME_MS", 30_000),
@@ -187,5 +193,6 @@ class RuntimeFactory:
             limits=limits,
             recorder=recorder,
             budget_max_usd=budget_max_usd,
+            runtime_config_id=config.id,
             answer_scorer=_build_answer_scorer(provider, budget, ledger),
         )

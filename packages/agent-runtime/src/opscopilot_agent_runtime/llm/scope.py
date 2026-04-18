@@ -58,7 +58,7 @@ class ScopeClassifier(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
     ) -> "ScopeClassifier":
-        model_id = _read_env("LLM_MODEL_ID")
+        model_id = _read_env("SCOPE_MODEL_ID")
         prompt_version = os.getenv("SCOPE_PROMPT_VERSION", "v1")
         return ScopeClassifier(
             provider,

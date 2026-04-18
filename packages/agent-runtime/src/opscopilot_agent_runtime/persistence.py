@@ -58,7 +58,7 @@ class AgentRunRecorder:
     def run_id(self) -> str:
         return self._run_id
 
-    def start(self, config_json: dict) -> None:
+    def start(self, config_json: dict, runtime_config_id: str | None = None) -> None:
         with self._sessionmaker() as db:
             session = db.get(models.Session, self._session_id)
             if session is None:
@@ -76,6 +76,7 @@ class AgentRunRecorder:
                 models.AgentRun(
                     id=self._run_id,
                     session_id=self._session_id,
+                    runtime_config_id=runtime_config_id,
                     started_at=_now(),
                     ended_at=None,
                     status="running",

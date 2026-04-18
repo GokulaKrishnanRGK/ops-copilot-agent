@@ -1,19 +1,35 @@
 import logging
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from opentelemetry import trace
 
+from opscopilot_db.connection import get_sessionmaker
+from opscopilot_db.repositories.sqlalchemy import RuntimeConfigRepo
+
+from .config_cache import InMemoryConfigCache
 from .logging import clear_log_context, configure_logging, set_log_context
 from .routers.health_router import router as health_router
 from .routers.api_router import router as api_router
 from .telemetry import configure_telemetry
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as db:
+        config = RuntimeConfigRepo(db=db).get_active()
+    if config is None:
+        raise RuntimeError("no runtime_configs row found — run database migrations")
+    app.state.config_cache = InMemoryConfigCache(config)
+    yield
+
+
 def create_app() -> FastAPI:
     configure_logging()
     configure_telemetry()
-    app = FastAPI(title="Ops Copilot API", version="0.1.0")
+    app = FastAPI(title="Ops Copilot API", version="0.1.0", lifespan=_lifespan)
     tracer = trace.get_tracer("opscopilot_api.http")
 
     @app.middleware("http")

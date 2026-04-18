@@ -69,7 +69,7 @@ class LlmClarifier(LlmNodeBase):
         ledger: CostLedger,
         prompt_source: PromptSource | None = None,
     ) -> "LlmClarifier":
-        model_id = _read_env("LLM_MODEL_ID")
+        model_id = _read_env("CLARIFIER_MODEL_ID")
         prompt_version = os.getenv("CLARIFIER_PROMPT_VERSION", "v1")
         return LlmClarifier(
             provider,

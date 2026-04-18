@@ -95,7 +95,7 @@ class AnswerSynthesizer(LlmNodeBase):
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
     ) -> "AnswerSynthesizer":
-        model_id = _read_env("LLM_MODEL_ID")
+        model_id = _read_env("ANSWER_MODEL_ID")
         prompt_version = os.getenv("ANSWER_PROMPT_VERSION", "v1")
         return AnswerSynthesizer(
             provider,

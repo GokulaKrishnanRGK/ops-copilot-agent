@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -24,11 +24,12 @@ def get_session_service(db: Session = Depends(get_db)) -> SessionService:
     return SessionService(repo=SessionRepo(db=db))
 
 
-def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
+def get_chat_service(request: Request, db: Session = Depends(get_db)) -> ChatService:
+    config = request.app.state.config_cache.get()
     return ChatService(
         session_repo=SessionRepo(db=db),
         message_repo=MessageRepo(db=db),
-        runtime_factory=RuntimeFactory(),
+        runtime_factory=RuntimeFactory(config=config),
     )
 
 

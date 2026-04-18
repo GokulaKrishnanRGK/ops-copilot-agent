@@ -11,7 +11,7 @@ class FakeRecorder:
         self.finished = None
         self.config = None
 
-    def start(self, config_json):
+    def start(self, config_json, runtime_config_id=None):
         self.started = True
         self.config = config_json
 
