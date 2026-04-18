@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 import re
+from typing import Protocol, runtime_checkable
 
+from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_agent_runtime.runtime.logging import get_logger
 from opscopilot_agent_runtime.state import AgentState
 
 _logger = get_logger(__name__)
+
+
+@runtime_checkable
+class InjectionClassifier(Protocol):
+    def classify(self, prompt: str, recorder: AgentRunRecorder | None = None) -> bool: ...
+
+
+class StubInjectionClassifier:
+    def classify(self, prompt: str, recorder: AgentRunRecorder | None = None) -> bool:
+        return False
 
 _PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"ignore\s+(previous|prior|all)\s+(instructions?|directives?|rules?|context)", re.IGNORECASE),
@@ -29,8 +41,13 @@ _REJECTION_MESSAGE = "This request cannot be processed."
 
 
 class PromptInjectionGuard:
-    def __init__(self, patterns: list[re.Pattern[str]] | None = None) -> None:
+    def __init__(
+        self,
+        patterns: list[re.Pattern[str]] | None = None,
+        classifier: InjectionClassifier | None = None,
+    ) -> None:
         self._patterns = patterns if patterns is not None else _PATTERNS
+        self._classifier = classifier
 
     def __call__(self, state: AgentState) -> AgentState:
         if state.error or not state.prompt:
@@ -39,17 +56,34 @@ class PromptInjectionGuard:
         _logger.debug("injection_guard: enter prompt_len=%d", len(state.prompt))
         for pattern in self._patterns:
             if pattern.search(state.prompt):
-                _logger.warning("injection_guard: blocked pattern=%s", pattern.pattern)
+                _logger.warning("injection_guard: blocked layer=regex pattern=%s", pattern.pattern)
                 return state.merge(
                     answer=_REJECTION_MESSAGE,
                     event=AgentEvent(
                         event_type="injection_guard.blocked",
-                        payload={"pattern": pattern.pattern},
+                        payload={"pattern": pattern.pattern, "layer": "regex"},
                     ),
                     error={
                         "type": "injection_detected",
                         "message": _REJECTION_MESSAGE,
                     },
                 )
-        _logger.debug("injection_guard: passed pattern_count=%d", len(self._patterns))
+        if self._classifier is not None and self._classifier.classify(state.prompt, recorder=state.recorder):
+            _logger.warning("injection_guard: blocked layer=llm_classifier")
+            return state.merge(
+                answer=_REJECTION_MESSAGE,
+                event=AgentEvent(
+                    event_type="injection_guard.blocked",
+                    payload={"pattern": "llm_classifier", "layer": "llm_classifier"},
+                ),
+                error={
+                    "type": "injection_detected",
+                    "message": _REJECTION_MESSAGE,
+                },
+            )
+        _logger.debug(
+            "injection_guard: passed pattern_count=%d classifier_present=%s",
+            len(self._patterns),
+            self._classifier is not None,
+        )
         return state

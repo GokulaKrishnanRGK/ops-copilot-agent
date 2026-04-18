@@ -10,9 +10,11 @@ from opscopilot_agent_runtime import (
     ClarifierNode,
     ExecutionLimits,
     LlmClarifier,
+    LlmInjectionClassifier,
     LlmPlanner,
     MCPClient,
     PlannerNode,
+    PromptInjectionGuard,
     ScopeCheckNode,
     ScopeClassifier,
     ToolExecutorNode,
@@ -134,8 +136,20 @@ class RuntimeFactory:
         ledger = CostLedger()
         client = MCPClient.from_env()
         prompt_source = prompt_source_from_env()
+        injection_classifier = None
+        if os.getenv("PROMPT_INJECTION_LLM_CHECK", "0") == "1":
+            injection_classifier = LlmInjectionClassifier(
+                provider=provider,
+                model_id=config.node("injection_classifier").model_id,
+                budget=budget,
+                ledger=ledger,
+                recorder=recorder,
+                prompt_source=prompt_source,
+                prompt_version=config.node("injection_classifier").prompt_version,
+            )
         graph = AgentGraph(
             tool_registry=ToolRegistry(client=client),
+            injection_guard=PromptInjectionGuard(classifier=injection_classifier),
             scope_check=ScopeCheckNode(
                 classifier=ScopeClassifier(
                     provider=provider,
