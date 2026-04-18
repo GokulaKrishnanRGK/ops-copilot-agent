@@ -41,6 +41,7 @@ class LlmNodeBase:
         self._llm_tokens_output_total = meter.create_counter("llm_tokens_output_total")
         self._llm_cost_usd_total = meter.create_counter("llm_cost_usd_total")
         self._llm_call_latency_ms = meter.create_histogram("llm_call_latency_ms")
+        self._llm_cache_hits_total = meter.create_counter("llm_cache_hits_total")
 
     def _call(
         self,
@@ -75,6 +76,8 @@ class LlmNodeBase:
             cost_usd = response.cost_usd
             span.set_attribute("gen_ai.usage.input_tokens", response.tokens_input)
             span.set_attribute("gen_ai.usage.output_tokens", response.tokens_output)
+            span.set_attribute("gen_ai.cache.hit", response.cache_hit)
+            span.set_attribute("gen_ai.cache.read_input_tokens", response.cache_read_input_tokens)
             span.set_attribute("cost_usd", float(cost_usd))
             span.set_attribute("latency_ms", response.latency_ms)
             metric_attrs = {
@@ -86,6 +89,8 @@ class LlmNodeBase:
             self._llm_tokens_output_total.add(response.tokens_output, metric_attrs)
             self._llm_cost_usd_total.add(float(cost_usd), metric_attrs)
             self._llm_call_latency_ms.record(response.latency_ms, metric_attrs)
+            if response.cache_hit:
+                self._llm_cache_hits_total.add(1, metric_attrs)
         if recorder:
             recorder.record_llm_call(
                 agent_node=agent_node,
@@ -94,7 +99,11 @@ class LlmNodeBase:
                 tokens_output=response.tokens_output,
                 cost_usd=cost_usd,
                 latency_ms=response.latency_ms,
-                metadata_json=response.provider_metadata,
+                metadata_json={
+                    **(response.provider_metadata or {}),
+                    "cache_hit": response.cache_hit,
+                    "cache_read_input_tokens": response.cache_read_input_tokens,
+                },
             )
             recorder.record_budget_event(
                 kind="llm_call",
