@@ -37,6 +37,7 @@ def _to_response(config: RuntimeConfigData) -> SettingsResponse:
         agent_max_tool_calls=config.agent_max_tool_calls,
         agent_max_llm_calls=config.agent_max_llm_calls,
         agent_max_execution_time_ms=config.agent_max_execution_time_ms,
+        bedrock_embedding_model_id=config.bedrock_embedding_model_id,
     )
 
 
@@ -70,6 +71,7 @@ def patch_settings(
             "agent_max_tool_calls": payload.agent_max_tool_calls,
             "agent_max_llm_calls": payload.agent_max_llm_calls,
             "agent_max_execution_time_ms": payload.agent_max_execution_time_ms,
+            "bedrock_embedding_model_id": payload.bedrock_embedding_model_id,
         },
     }
     new_row = RuntimeConfigRepo(db=db).create(config_json=config_json, schema_version=current.schema_version)

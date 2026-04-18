@@ -209,40 +209,20 @@ def _build_ragas_metric(name: str) -> Any:
 
 
 def _build_ragas_llm() -> Any:
-    provider = os.getenv("RAGAS_LLM_PROVIDER", "openai")
-    model = os.getenv("RAGAS_LLM_MODEL") or os.getenv("LLM_MODEL_ID") or "gpt-4o-mini"
-    if provider == "bedrock":
-        llm_factory = getattr(import_module("ragas.llms"), "llm_factory")
-        return llm_factory(
-            _litellm_model_name(provider, model),
-            provider=provider,
-            client=_build_litellm_router(model),
-            adapter="litellm",
-        )
-    if provider != "openai":
-        raise RuntimeError("RAGAS_LLM_PROVIDER currently supports openai or bedrock")
-    api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("RAGAS_OPENAI_API_KEY or OPENAI_API_KEY is required for RAGAS scoring")
-    client_class = getattr(import_module("openai"), "AsyncOpenAI")
+    model = os.getenv("RAGAS_LLM_MODEL") or os.getenv("LLM_MODEL_ID") or "global.amazon.nova-2-lite-v1:0"
     llm_factory = getattr(import_module("ragas.llms"), "llm_factory")
-    return llm_factory(model, provider=provider, client=client_class(api_key=api_key))
+    return llm_factory(
+        _litellm_model_name("bedrock", model),
+        provider="bedrock",
+        client=_build_litellm_router(model),
+        adapter="litellm",
+    )
 
 
 def _build_ragas_embeddings() -> Any:
-    provider = os.getenv("RAGAS_EMBEDDING_PROVIDER", "openai")
-    model = os.getenv("RAGAS_EMBEDDING_MODEL") or _default_embedding_model(provider)
-    if provider == "bedrock":
-        embeddings_class = getattr(import_module("ragas.embeddings"), "LiteLLMEmbeddings")
-        return embeddings_class(model=_litellm_model_name(provider, model), **_bedrock_litellm_params())
-    if provider != "openai":
-        raise RuntimeError("RAGAS_EMBEDDING_PROVIDER currently supports openai or bedrock")
-    api_key = os.getenv("RAGAS_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("RAGAS_OPENAI_API_KEY or OPENAI_API_KEY is required for RAGAS scoring")
-    client_class = getattr(import_module("openai"), "AsyncOpenAI")
-    embedding_factory = getattr(import_module("ragas.embeddings.base"), "embedding_factory")
-    return embedding_factory(provider, model=model, client=client_class(api_key=api_key))
+    model = os.getenv("RAGAS_EMBEDDING_MODEL") or _default_embedding_model()
+    embeddings_class = getattr(import_module("ragas.embeddings"), "LiteLLMEmbeddings")
+    return embeddings_class(model=_litellm_model_name("bedrock", model), **_bedrock_litellm_params())
 
 
 def _build_litellm_router(model: str) -> Any:
@@ -285,10 +265,8 @@ def _litellm_model_name(provider: str, model: str) -> str:
     return f"{provider}/{model}"
 
 
-def _default_embedding_model(provider: str) -> str:
-    if provider == "bedrock":
-        return os.getenv("BEDROCK_EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v1")
-    return os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+def _default_embedding_model() -> str:
+    return os.getenv("BEDROCK_EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v1")
 
 
 def _run_metric(metric: Any, payload: dict) -> Any:

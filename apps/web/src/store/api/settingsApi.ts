@@ -30,6 +30,7 @@ export type SettingsResponse = {
   agent_max_tool_calls: number;
   agent_max_llm_calls: number;
   agent_max_execution_time_ms: number;
+  bedrock_embedding_model_id: string;
 };
 
 export type SettingsUpdate = Omit<SettingsResponse, "id" | "schema_version">;

@@ -101,10 +101,6 @@ export TEST_LOG_ROOT="${TEST_LOG_ROOT:-/Volumes/Work/Projects/logs/opscopilot/te
 TEST_RUN_DIR="$(TEST_LOG_ROOT="${TEST_LOG_ROOT}" bash "$repo_root/scripts/new-test-run-dir.sh")"
 export TEST_RUN_DIR
 echo "integration: test logs dir ${TEST_RUN_DIR}"
-if [ -n "${OPENAI_API_KEY:-}" ]; then
-  export LLM_EMBEDDING_PROVIDER="${LLM_EMBEDDING_PROVIDER:-openai}"
-fi
-
 KUBECONFIG_PATH="$kube_tmp" \
   docker compose -f "$repo_root/deploy/compose/opensearch.yml" -f "$repo_root/deploy/compose/observability.yml" -f "$repo_root/deploy/compose/integration.yml" up -d --build
 

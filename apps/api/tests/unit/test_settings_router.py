@@ -31,6 +31,7 @@ def _valid_patch_payload(**overrides) -> dict:
         "agent_max_tool_calls": 10,
         "agent_max_llm_calls": 10,
         "agent_max_execution_time_ms": 30000,
+        "bedrock_embedding_model_id": "amazon.titan-embed-text-v1",
     }
     base.update(overrides)
     return base
@@ -43,6 +44,7 @@ def _make_config(**overrides) -> RuntimeConfigData:
         "nodes": {name: NodeConfig(model_id="test-model", prompt_version="latest") for name in _NODE_NAMES},
         "max_agent_steps": 10,
         "max_budget_usd": None,
+        "bedrock_embedding_model_id": "amazon.titan-embed-text-v1",
     }
     defaults.update(overrides)
     return RuntimeConfigData(**defaults)
@@ -230,6 +232,14 @@ def test_patch_settings_rejects_empty_judge_model_id(app: object, client: TestCl
     assert resp.status_code == 422
 
 
+def test_patch_settings_rejects_empty_bedrock_embedding_model_id(app: object, client: TestClient) -> None:
+    app.state.config_cache = _FakeConfigCache(_make_config())
+
+    resp = client.patch("/api/settings", json=_valid_patch_payload(bedrock_embedding_model_id=""))
+
+    assert resp.status_code == 422
+
+
 # ── RuntimeConfigData.from_db — env_overrides persistence ─────────────────
 
 def test_from_db_reads_env_overrides_fields() -> None:
@@ -245,6 +255,7 @@ def test_from_db_reads_env_overrides_fields() -> None:
             "agent_max_tool_calls": 25,
             "agent_max_llm_calls": 8,
             "agent_max_execution_time_ms": 45_000,
+            "bedrock_embedding_model_id": "custom-embedding-model",
         },
     })
 
@@ -258,36 +269,31 @@ def test_from_db_reads_env_overrides_fields() -> None:
     assert config.agent_max_tool_calls == 25
     assert config.agent_max_llm_calls == 8
     assert config.agent_max_execution_time_ms == 45_000
+    assert config.bedrock_embedding_model_id == "custom-embedding-model"
 
 
-def test_from_db_falls_back_to_env_vars_when_no_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("EVAL_SAMPLE_RATE", "0.33")
-    monkeypatch.setenv("AGENT_MAX_TOOL_CALLS", "7")
-    monkeypatch.setenv("PROMPT_INJECTION_LLM_CHECK", "1")
-    monkeypatch.setenv("EVAL_LLM_JUDGE_ENABLED", "0")
-
+def test_from_db_uses_dataclass_defaults_when_no_overrides() -> None:
     row = _make_db_row({"nodes": {}, "limits": {}})
     config = RuntimeConfigData.from_db(row)
 
-    assert config.eval_sample_rate == pytest.approx(0.33)
-    assert config.agent_max_tool_calls == 7
-    assert config.prompt_injection_llm_check is True
-    assert config.eval_llm_judge_enabled is False
+    assert config.eval_sample_rate == pytest.approx(0.1)
+    assert config.agent_max_tool_calls == 10
+    assert config.prompt_injection_llm_check is False
+    assert config.eval_llm_judge_enabled is True
 
 
-def test_from_db_env_overrides_take_priority_over_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("EVAL_SAMPLE_RATE", "0.9")
-    monkeypatch.setenv("AGENT_MAX_TOOL_CALLS", "99")
-
+def test_from_db_partial_env_overrides_use_defaults_for_missing_keys() -> None:
     row = _make_db_row({
         "nodes": {},
         "limits": {},
-        "env_overrides": {"eval_sample_rate": 0.1, "agent_max_tool_calls": 3},
+        "env_overrides": {"eval_sample_rate": 0.5, "agent_max_tool_calls": 3},
     })
     config = RuntimeConfigData.from_db(row)
 
-    assert config.eval_sample_rate == pytest.approx(0.1)
+    assert config.eval_sample_rate == pytest.approx(0.5)
     assert config.agent_max_tool_calls == 3
+    assert config.eval_llm_judge_enabled is True
+    assert config.prompt_injection_llm_check is False
 
 
 def test_from_db_limits_block_parsed_correctly() -> None:

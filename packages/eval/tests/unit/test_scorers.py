@@ -175,19 +175,6 @@ def test_ragas_scorer_skips_empty_contexts():
     assert result is None
 
 
-def test_ragas_factories_require_openai_key(monkeypatch):
-    monkeypatch.setenv("RAGAS_LLM_PROVIDER", "openai")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("RAGAS_OPENAI_API_KEY", raising=False)
-
-    try:
-        _build_ragas_llm()
-    except RuntimeError as exc:
-        assert "RAGAS_OPENAI_API_KEY" in str(exc)
-    else:
-        raise AssertionError("expected missing RAGAS key to fail")
-
-
 def test_ragas_factories_support_bedrock(monkeypatch):
     monkeypatch.setenv("RAGAS_LLM_PROVIDER", "bedrock")
     monkeypatch.setenv("RAGAS_LLM_MODEL", "global.amazon.nova-2-lite-v1:0")

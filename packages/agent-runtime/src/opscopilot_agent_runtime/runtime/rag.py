@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from opentelemetry import metrics, trace
 from opscopilot_rag.citations import build_citations
-from opscopilot_rag.embeddings import OpenAIEmbeddingAdapter
+from opscopilot_rag.embeddings import BedrockEmbeddingAdapter
 from opscopilot_rag.opensearch_client import OpenSearchClient
 from opscopilot_rag.retrieval import retrieve_knn
 from opscopilot_rag.types import EmbeddingRequest, OpenSearchConfig, \
@@ -17,7 +17,6 @@ from opscopilot_agent_runtime.runtime.logging import get_logger
 
 if TYPE_CHECKING:
   from opscopilot_agent_runtime.persistence import AgentRunRecorder
-
 
 @dataclass(frozen=True)
 class RagContext:
@@ -35,19 +34,19 @@ def _read_top_k() -> int:
 
 
 class RagRetriever:
-  def __init__(self, config: OpenSearchConfig, top_k: int) -> None:
+  def __init__(self, config: OpenSearchConfig, top_k: int, model_id: str) -> None:
     self._config = config
     self._top_k = top_k
     self._client = OpenSearchClient(config).client
-    self._adapter = OpenAIEmbeddingAdapter()
+    self._adapter = BedrockEmbeddingAdapter(model=model_id)
     meter = metrics.get_meter("opscopilot_agent_runtime.rag")
     self._rag_retrieval_requests_total = meter.create_counter("rag_retrieval_requests_total")
     self._rag_retrieval_latency_ms = meter.create_histogram("rag_retrieval_latency_ms")
     self._rag_retrieved_chunks_total = meter.create_counter("rag_retrieved_chunks_total")
 
   @staticmethod
-  def from_env() -> "RagRetriever":
-    return RagRetriever(OpenSearchClient().config, _read_top_k())
+  def from_env(model_id: str) -> "RagRetriever":
+    return RagRetriever(OpenSearchClient().config, _read_top_k(), model_id)
 
   def retrieve(self, query: str, recorder: "AgentRunRecorder | None" = None) -> RagContext:
     import json

@@ -61,9 +61,6 @@ allowed_namespaces_csv="${K8S_ALLOWED_NAMESPACES:-default}"
 api_log_file="/tmp/opscopilot-api.log"
 tool_server_log_file="/tmp/opscopilot-tool-server.log"
 llm_model_id="${LLM_MODEL_ID:-}"
-llm_embedding_provider="${LLM_EMBEDDING_PROVIDER:-openai}"
-openai_embedding_model="${OPENAI_EMBEDDING_MODEL:-}"
-openai_api_key="${OPENAI_API_KEY:-}"
 bedrock_embedding_model_id="${BEDROCK_EMBEDDING_MODEL_ID:-}"
 bedrock_region="${BEDROCK_REGION:-${aws_region}}"
 runtime_secret_name="${RUNTIME_SECRET_NAME:-opscopilot-runtime-secrets}"
@@ -76,25 +73,13 @@ if [ -z "${llm_model_id}" ]; then
   echo "LLM_MODEL_ID is required (export it before running helm-app-values-generate/helm-app-up)." >&2
   exit 1
 fi
-if [ "${llm_embedding_provider}" = "openai" ]; then
-  if [ -z "${openai_embedding_model}" ]; then
-    echo "OPENAI_EMBEDDING_MODEL is required when LLM_EMBEDDING_PROVIDER=openai." >&2
-    exit 1
-  fi
-  if [ -z "${openai_api_key}" ]; then
-    echo "OPENAI_API_KEY is required when LLM_EMBEDDING_PROVIDER=openai." >&2
-    exit 1
-  fi
+if [ -z "${bedrock_embedding_model_id}" ]; then
+  echo "BEDROCK_EMBEDDING_MODEL_ID is required." >&2
+  exit 1
 fi
-if [ "${llm_embedding_provider}" = "bedrock" ]; then
-  if [ -z "${bedrock_embedding_model_id}" ]; then
-    echo "BEDROCK_EMBEDDING_MODEL_ID is required when LLM_EMBEDDING_PROVIDER=bedrock." >&2
-    exit 1
-  fi
-  if [ -z "${bedrock_region}" ]; then
-    echo "BEDROCK_REGION (or AWS region) is required when LLM_EMBEDDING_PROVIDER=bedrock." >&2
-    exit 1
-  fi
+if [ -z "${bedrock_region}" ]; then
+  echo "BEDROCK_REGION (or AWS region) is required." >&2
+  exit 1
 fi
 
 if [ -n "${python_registry_url}" ] && [ "${python_registry_url}" != "null" ]; then
@@ -212,20 +197,8 @@ fi
   echo "    OTEL_EXPORTER_OTLP_PROTOCOL: \"${otel_protocol}\""
   echo "    OTEL_SERVICE_NAME: \"${api_otel_service_name}\""
   echo "    LLM_MODEL_ID: \"${llm_model_id}\""
-  echo "    LLM_EMBEDDING_PROVIDER: \"${llm_embedding_provider}\""
-  if [ "${llm_embedding_provider}" = "openai" ]; then
-    echo "    OPENAI_EMBEDDING_MODEL: \"${openai_embedding_model}\""
-  fi
-  if [ "${llm_embedding_provider}" = "bedrock" ]; then
-    echo "    BEDROCK_EMBEDDING_MODEL_ID: \"${bedrock_embedding_model_id}\""
-    echo "    BEDROCK_REGION: \"${bedrock_region}\""
-  fi
-  if [ "${llm_embedding_provider}" = "openai" ]; then
-    echo "  secretEnv:"
-    echo "    OPENAI_API_KEY:"
-    echo "      secretName: \"${runtime_secret_name}\""
-    echo "      secretKey: \"OPENAI_API_KEY\""
-  fi
+  echo "    BEDROCK_EMBEDDING_MODEL_ID: \"${bedrock_embedding_model_id}\""
+  echo "    BEDROCK_REGION: \"${bedrock_region}\""
 } >"${app_values_out}"
 
 echo "generated ${app_values_out}"

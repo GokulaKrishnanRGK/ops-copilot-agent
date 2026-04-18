@@ -21,6 +21,7 @@ from opscopilot_agent_runtime import (
     ToolRegistry,
     prompt_source_from_env,
 )
+from opscopilot_agent_runtime.runtime.rag import RagRetriever
 from opscopilot_agent_runtime.history import PostgresSummaryStore
 from opscopilot_agent_runtime.llm.summarizer import SummarizerLlmNode
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
@@ -115,6 +116,11 @@ class RuntimeFactory:
         ledger = CostLedger()
         client = MCPClient.from_env()
         prompt_source = prompt_source_from_env()
+        rag_retriever: RagRetriever | None = None
+        try:
+            rag_retriever = RagRetriever.from_env(model_id=config.bedrock_embedding_model_id)
+        except Exception:
+            pass
         limits = ExecutionLimits(
             max_agent_steps=config.max_agent_steps,
             max_tool_calls=config.agent_max_tool_calls,
@@ -156,6 +162,7 @@ class RuntimeFactory:
                     prompt_source=prompt_source,
                     prompt_version=config.node("planner").prompt_version,
                 ),
+                rag_retriever=rag_retriever,
                 max_steps=limits.max_agent_steps,
                 max_llm_calls=limits.max_llm_calls,
             ),

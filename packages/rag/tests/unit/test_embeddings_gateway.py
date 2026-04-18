@@ -2,7 +2,7 @@ from opscopilot_llm_gateway.accounting import CostLedger
 from opscopilot_llm_gateway.budgets import BudgetEnforcer, BudgetState
 from opscopilot_llm_gateway.types import EmbeddingRequest, EmbeddingResponse
 
-from opscopilot_rag.embeddings import OpenAIEmbeddingAdapter
+from opscopilot_rag.embeddings import BedrockEmbeddingAdapter
 from opscopilot_rag.types import EmbeddingRequest as RagEmbeddingRequest
 
 
@@ -18,10 +18,10 @@ class FakeEmbeddingProvider:
         )
 
 
-def test_openai_embedding_adapter_uses_gateway():
-    adapter = OpenAIEmbeddingAdapter(
+def test_bedrock_embedding_adapter_uses_gateway():
+    adapter = BedrockEmbeddingAdapter(
         provider=FakeEmbeddingProvider(),
-        model="text-embedding-3-small",
+        model="amazon.titan-embed-text-v1",
         budget=BudgetEnforcer(BudgetState(max_usd=1.0, total_usd=0.0)),
         ledger=CostLedger(),
     )

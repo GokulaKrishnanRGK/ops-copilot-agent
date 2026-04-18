@@ -41,6 +41,10 @@ type HardLimitErrors = {
   agent_max_execution_time_ms?: string;
 };
 
+type EmbeddingErrors = {
+  bedrock_embedding_model_id?: string;
+};
+
 // ── validators ─────────────────────────────────────────────────────────────
 
 const NODE_LABELS: Record<keyof SettingsNodes, string> = {
@@ -399,6 +403,37 @@ function SafetyInjectionSection({ llmCheckEnabled, onChange }: SafetySectionProp
   );
 }
 
+// ── embedding configuration section ───────────────────────────────────────
+
+type EmbeddingConfigSectionProps = {
+  modelId: string;
+  error?: string;
+  onChange: (v: string) => void;
+};
+
+function EmbeddingConfigSection({ modelId, error, onChange }: EmbeddingConfigSectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Bedrock Embedding Model</span>
+          <span className="limits-field-unit">model ID for RAG retrieval</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input${error ? " settings-input-error" : ""}`}
+            value={modelId}
+            onChange={(e: { target: { value: string } }) => onChange(e.target.value)}
+            placeholder="amazon.titan-embed-text-v1"
+            spellCheck={false}
+          />
+          {error && <span className="settings-field-error">{error}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── agent hard limits section ──────────────────────────────────────────────
 
 type HardLimitsSectionProps = {
@@ -500,6 +535,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [llmCallsRaw, setLlmCallsRaw] = useState("");
   const [execTimeRaw, setExecTimeRaw] = useState("");
   const [hardLimitErrors, setHardLimitErrors] = useState<HardLimitErrors>({});
+  const [embeddingErrors, setEmbeddingErrors] = useState<EmbeddingErrors>({});
 
   useEffect(() => {
     if (data && !draft) {
@@ -541,14 +577,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     const hErrors = validateHistory(historyWindowRaw);
     const eErrors = validateEval(evalSampleRateRaw, draft.eval_judge_model_id);
     const hlErrors = validateHardLimits(toolCallsRaw, llmCallsRaw, execTimeRaw);
+    const embErrors: EmbeddingErrors = !draft.bedrock_embedding_model_id.trim()
+      ? { bedrock_embedding_model_id: "Required" }
+      : {};
 
     setNodeErrors(nErrors);
     setLimitsErrors(lErrors);
     setHistoryErrors(hErrors);
     setEvalErrors(eErrors);
     setHardLimitErrors(hlErrors);
+    setEmbeddingErrors(embErrors);
 
-    if (hasErrors(nErrors, lErrors, hErrors, eErrors, hlErrors)) return;
+    if (hasErrors(nErrors, lErrors, hErrors, eErrors, hlErrors, embErrors)) return;
 
     setSaveError(null);
 
@@ -665,6 +705,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     const errors = validateHardLimits(toolCallsRaw, llmCallsRaw, v);
     setHardLimitErrors(errors);
     if (!errors.agent_max_execution_time_ms && draft) setDraft({ ...draft, agent_max_execution_time_ms: Number(v) });
+  }
+
+  function handleEmbeddingModelChange(v: string) {
+    if (!draft) return;
+    setIsDirty(true);
+    const embErrors: EmbeddingErrors = !v.trim() ? { bedrock_embedding_model_id: "Required" } : {};
+    setEmbeddingErrors(embErrors);
+    setDraft({ ...draft, bedrock_embedding_model_id: v });
   }
 
   return (
@@ -789,6 +837,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 onToolCallsChange={handleToolCallsChange}
                 onLlmCallsChange={handleLlmCallsChange}
                 onExecTimeChange={handleExecTimeChange}
+              />
+            </SettingsSection>
+            <SettingsSection
+              title="Embedding Configuration"
+              description="Bedrock model used for RAG document retrieval embeddings."
+            >
+              <EmbeddingConfigSection
+                modelId={draft?.bedrock_embedding_model_id ?? ""}
+                error={embeddingErrors.bedrock_embedding_model_id}
+                onChange={handleEmbeddingModelChange}
               />
             </SettingsSection>
           </div>

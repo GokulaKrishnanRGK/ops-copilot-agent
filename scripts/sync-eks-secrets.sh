@@ -106,13 +106,7 @@ kubectl -n "${namespace}" create secret generic "${os_pass_secret_name}" \
   --from-literal=password="${os_pass_value}" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
-runtime_secret_name="${RUNTIME_SECRET_NAME:-opscopilot-runtime-secrets}"
-kubectl -n "${namespace}" create secret generic "${runtime_secret_name}" \
-  --from-literal=OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
-  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-
 echo "synced Kubernetes secrets in namespace=${namespace}"
 echo "- ${db_secret_name} (DATABASE_URL)"
 echo "- ${os_user_secret_name} (username)"
 echo "- ${os_pass_secret_name} (password)"
-echo "- ${runtime_secret_name} (runtime env secrets, non-AWS)"

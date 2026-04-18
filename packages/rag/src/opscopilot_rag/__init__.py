@@ -1,6 +1,6 @@
 from .chunking import chunk_text
 from .citations import build_citations
-from .embeddings import EmbeddingAdapter, OpenAIEmbeddingAdapter
+from .embeddings import BedrockEmbeddingAdapter, EmbeddingAdapter
 from .indexing import build_index_documents, bulk_upsert_chunks
 from .ingestion import discover_document_paths, load_documents, normalize_text
 from .opensearch_client import (
@@ -29,7 +29,7 @@ __all__ = [
     "EmbeddingRequest",
     "EmbeddingResult",
     "IndexedChunk",
-    "OpenAIEmbeddingAdapter",
+    "BedrockEmbeddingAdapter",
     "OpenSearchClient",
     "OpenSearchConfig",
     "RetrievalResult",

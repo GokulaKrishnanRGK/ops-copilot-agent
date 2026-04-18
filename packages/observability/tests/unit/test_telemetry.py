@@ -45,7 +45,7 @@ def test_configure_telemetry_requires_service_name() -> None:
         configure_telemetry()
 
 
-def test_instrument_openllmetry_disables_content_tracing_by_default(monkeypatch) -> None:
+def test_instrument_openllmetry_instruments_bedrock(monkeypatch) -> None:
     calls = []
 
     class FakeInstrumentor:
@@ -54,23 +54,17 @@ def test_instrument_openllmetry_disables_content_tracing_by_default(monkeypatch)
 
     class FakeModule:
         BedrockInstrumentor = FakeInstrumentor
-        OpenAIInstrumentor = FakeInstrumentor
 
     def fake_import_module(name: str):
-        if name in {
-            "opentelemetry.instrumentation.bedrock",
-            "opentelemetry.instrumentation.openai_v2",
-        }:
+        if name == "opentelemetry.instrumentation.bedrock":
             return FakeModule
         raise AssertionError(name)
 
-    monkeypatch.delenv("TRACELOOP_TRACE_CONTENT", raising=False)
     monkeypatch.setattr(telemetry, "import_module", fake_import_module)
 
     _instrument_openllmetry()
 
-    assert calls == ["instrumented", "instrumented"]
-    assert telemetry.os.getenv("TRACELOOP_TRACE_CONTENT") == "false"
+    assert calls == ["instrumented"]
 
 
 def test_metric_names_use_genai_conventions() -> None:

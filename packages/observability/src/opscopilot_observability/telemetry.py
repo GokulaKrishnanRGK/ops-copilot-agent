@@ -187,9 +187,7 @@ def _instrument_provider(module_name: str, class_name: str) -> None:
 
 
 def _instrument_openllmetry() -> None:
-    os.environ.setdefault("TRACELOOP_TRACE_CONTENT", "false")
     _instrument_provider("opentelemetry.instrumentation.bedrock", "BedrockInstrumentor")
-    _instrument_provider("opentelemetry.instrumentation.openai_v2", "OpenAIInstrumentor")
 
 
 class _LangfuseFilteringExporter(SpanExporter):

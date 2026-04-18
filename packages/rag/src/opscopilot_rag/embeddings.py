@@ -36,7 +36,7 @@ class EmbeddingAdapter:
         raise NotImplementedError("embedding adapter is not configured")
 
 
-class OpenAIEmbeddingAdapter(EmbeddingAdapter):
+class BedrockEmbeddingAdapter(EmbeddingAdapter):
     def __init__(
         self,
         provider=None,

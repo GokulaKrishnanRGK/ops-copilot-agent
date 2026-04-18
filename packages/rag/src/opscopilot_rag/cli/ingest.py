@@ -7,7 +7,7 @@ import sys
 from typing import Iterable
 
 from opscopilot_rag.chunking import chunk_text
-from opscopilot_rag.embeddings import OpenAIEmbeddingAdapter
+from opscopilot_rag.embeddings import BedrockEmbeddingAdapter
 from opscopilot_rag.indexing import build_index_documents, bulk_upsert_chunks
 from opscopilot_rag.ingestion import load_documents
 from opscopilot_rag.opensearch_client import OpenSearchClient
@@ -93,7 +93,7 @@ def ingest_documents(args: argparse.Namespace) -> int:
         config = None
     os_client = OpenSearchClient(config)
 
-    adapter = OpenAIEmbeddingAdapter()
+    adapter = BedrockEmbeddingAdapter()
     texts = [chunk.text for chunk in chunks]
     vectors: list[list[float]] = []
     dimensions = 0
