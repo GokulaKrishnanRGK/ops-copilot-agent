@@ -446,6 +446,101 @@
     border-top: 1px solid var(--border);
   }
 
+  .settings-save-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    padding: 14px 0 6px;
+    margin-top: 28px;
+    border-top: 1px solid var(--border);
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+  }
+
+  .settings-dirty-hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-right: auto;
+  }
+
+  .settings-save-btn {
+    min-width: 90px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 20px;
+  }
+
+  .settings-save-spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  .settings-success-toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(90, 173, 255, 0.10);
+    border: 1px solid var(--accent);
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .settings-success-icon {
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .settings-error-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(192, 33, 58, 0.08);
+    border: 1px solid var(--error);
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  :root[data-theme="dark"] .settings-error-banner,
+  :root:not([data-theme]) .settings-error-banner {
+    background: rgba(255, 111, 139, 0.10);
+  }
+
+  .settings-error-banner-text {
+    flex: 1;
+  }
+
+  .settings-error-dismiss {
+    background: none;
+    border: none;
+    box-shadow: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .settings-error-dismiss:hover:not(:disabled) {
+    box-shadow: none;
+    color: var(--ink);
+  }
+
   @media (max-width: 800px) {
     .settings-section {
       grid-template-columns: 1fr;

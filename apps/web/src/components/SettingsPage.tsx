@@ -1,9 +1,10 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import {
   NodeConfig,
   SettingsNodes,
   SettingsUpdate,
   useGetSettingsQuery,
+  usePatchSettingsMutation,
 } from "../store/api/settingsApi";
 
 // ── types ──────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ type HardLimitErrors = {
   agent_max_execution_time_ms?: string;
 };
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ── validators ─────────────────────────────────────────────────────────────
 
 const NODE_LABELS: Record<keyof SettingsNodes, string> = {
   scope: "Scope Checker",
@@ -68,33 +69,27 @@ function validateNodes(nodes: SettingsNodes): NodeErrors {
 function validateLimits(steps: string, budget: string): LimitsErrors {
   const errors: LimitsErrors = {};
   const stepsNum = Number(steps);
-  if (!steps.trim() || !Number.isInteger(stepsNum) || stepsNum < 1) {
+  if (!steps.trim() || !Number.isInteger(stepsNum) || stepsNum < 1)
     errors.max_agent_steps = "Must be a whole number ≥ 1";
-  }
-  if (budget.trim() !== "" && (isNaN(Number(budget)) || Number(budget) < 0)) {
+  if (budget.trim() !== "" && (isNaN(Number(budget)) || Number(budget) < 0))
     errors.max_budget_usd = "Must be a number ≥ 0, or leave blank for unlimited";
-  }
   return errors;
 }
 
 function validateHistory(window: string): HistoryErrors {
   const errors: HistoryErrors = {};
   const n = Number(window);
-  if (!window.trim() || !Number.isInteger(n) || n < 1) {
+  if (!window.trim() || !Number.isInteger(n) || n < 1)
     errors.history_window_turns = "Must be a whole number ≥ 1";
-  }
   return errors;
 }
 
 function validateEval(sampleRate: string, judgeModelId: string): EvalErrors {
   const errors: EvalErrors = {};
   const rate = Number(sampleRate);
-  if (sampleRate.trim() === "" || isNaN(rate) || rate < 0 || rate > 1) {
+  if (sampleRate.trim() === "" || isNaN(rate) || rate < 0 || rate > 1)
     errors.eval_sample_rate = "Must be a number between 0 and 1";
-  }
-  if (!judgeModelId.trim()) {
-    errors.eval_judge_model_id = "Required";
-  }
+  if (!judgeModelId.trim()) errors.eval_judge_model_id = "Required";
   return errors;
 }
 
@@ -107,6 +102,10 @@ function validateHardLimits(toolCalls: string, llmCalls: string, execTime: strin
   if (!llmCalls.trim() || !Number.isInteger(lc) || lc < 1) errors.agent_max_llm_calls = "Must be a whole number ≥ 1";
   if (!execTime.trim() || !Number.isInteger(et) || et < 1) errors.agent_max_execution_time_ms = "Must be a whole number ≥ 1";
   return errors;
+}
+
+function hasErrors(...errorMaps: object[]): boolean {
+  return errorMaps.some((e) => Object.keys(e).length > 0);
 }
 
 // ── shared components ──────────────────────────────────────────────────────
@@ -481,20 +480,22 @@ const DEFAULT_NODES: SettingsNodes = {
 
 export function SettingsPage({ onClose }: SettingsPageProps) {
   const { data, isLoading, isError } = useGetSettingsQuery();
+  const [patchSettings, { isLoading: isSaving }] = usePatchSettingsMutation();
 
   const [draft, setDraft] = useState<SettingsUpdate | null>(null);
-  const [nodeErrors, setNodeErrors] = useState<NodeErrors>({});
+  const [isDirty, setIsDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [nodeErrors, setNodeErrors] = useState<NodeErrors>({});
   const [stepsRaw, setStepsRaw] = useState("");
   const [budgetRaw, setBudgetRaw] = useState("");
   const [limitsErrors, setLimitsErrors] = useState<LimitsErrors>({});
-
   const [historyWindowRaw, setHistoryWindowRaw] = useState("");
   const [historyErrors, setHistoryErrors] = useState<HistoryErrors>({});
-
   const [evalSampleRateRaw, setEvalSampleRateRaw] = useState("");
   const [evalErrors, setEvalErrors] = useState<EvalErrors>({});
-
   const [toolCallsRaw, setToolCallsRaw] = useState("");
   const [llmCallsRaw, setLlmCallsRaw] = useState("");
   const [execTimeRaw, setExecTimeRaw] = useState("");
@@ -514,13 +515,71 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     }
   }, [data, draft]);
 
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  function handleClose() {
+    if (isDirty && !window.confirm("You have unsaved changes. Leave without saving?")) return;
+    onClose();
+  }
+
+  async function handleSave() {
+    if (!draft) return;
+
+    const nErrors = validateNodes(draft.nodes);
+    const lErrors = validateLimits(stepsRaw, budgetRaw);
+    const hErrors = validateHistory(historyWindowRaw);
+    const eErrors = validateEval(evalSampleRateRaw, draft.eval_judge_model_id);
+    const hlErrors = validateHardLimits(toolCallsRaw, llmCallsRaw, execTimeRaw);
+
+    setNodeErrors(nErrors);
+    setLimitsErrors(lErrors);
+    setHistoryErrors(hErrors);
+    setEvalErrors(eErrors);
+    setHardLimitErrors(hlErrors);
+
+    if (hasErrors(nErrors, lErrors, hErrors, eErrors, hlErrors)) return;
+
+    setSaveError(null);
+
+    try {
+      await patchSettings(draft).unwrap();
+      setIsDirty(false);
+      setSaveSuccess(true);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: unknown) {
+      let message = "Save failed. Please try again.";
+      if (err && typeof err === "object") {
+        const errObj = err as Record<string, unknown>;
+        if (errObj.data && typeof errObj.data === "object") {
+          const errData = errObj.data as Record<string, unknown>;
+          if (typeof errData.detail === "string") message = errData.detail;
+        }
+      }
+      setSaveError(message);
+    }
+  }
+
   function handleNodesChange(nodes: SettingsNodes) {
     if (!draft) return;
+    setIsDirty(true);
     setNodeErrors(validateNodes(nodes));
     setDraft({ ...draft, nodes });
   }
 
   function handleStepsChange(v: string) {
+    setIsDirty(true);
     setStepsRaw(v);
     const errors = validateLimits(v, budgetRaw);
     setLimitsErrors(errors);
@@ -528,13 +587,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   }
 
   function handleBudgetChange(v: string) {
+    setIsDirty(true);
     setBudgetRaw(v);
     const errors = validateLimits(stepsRaw, v);
     setLimitsErrors(errors);
-    if (!errors.max_budget_usd && draft) setDraft({ ...draft, max_budget_usd: v.trim() === "" ? null : Number(v) });
+    if (!errors.max_budget_usd && draft)
+      setDraft({ ...draft, max_budget_usd: v.trim() === "" ? null : Number(v) });
   }
 
   function handleHistoryWindowChange(v: string) {
+    setIsDirty(true);
     setHistoryWindowRaw(v);
     const errors = validateHistory(v);
     setHistoryErrors(errors);
@@ -543,10 +605,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   function handleSummarizerVersionChange(v: string) {
     if (!draft) return;
+    setIsDirty(true);
     setDraft({ ...draft, summarizer_prompt_version: v });
   }
 
   function handleEvalSampleRateChange(v: string) {
+    setIsDirty(true);
     setEvalSampleRateRaw(v);
     const errors = validateEval(v, draft?.eval_judge_model_id ?? "");
     setEvalErrors(errors);
@@ -555,16 +619,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   function handleLlmJudgeChange(v: boolean) {
     if (!draft) return;
+    setIsDirty(true);
     setDraft({ ...draft, eval_llm_judge_enabled: v });
   }
 
   function handleRagasChange(v: boolean) {
     if (!draft) return;
+    setIsDirty(true);
     setDraft({ ...draft, eval_ragas_enabled: v });
   }
 
   function handleJudgeModelChange(v: string) {
     if (!draft) return;
+    setIsDirty(true);
     const errors = validateEval(evalSampleRateRaw, v);
     setEvalErrors(errors);
     setDraft({ ...draft, eval_judge_model_id: v });
@@ -572,10 +639,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   function handleInjectionCheckChange(v: boolean) {
     if (!draft) return;
+    setIsDirty(true);
     setDraft({ ...draft, prompt_injection_llm_check: v });
   }
 
   function handleToolCallsChange(v: string) {
+    setIsDirty(true);
     setToolCallsRaw(v);
     const errors = validateHardLimits(v, llmCallsRaw, execTimeRaw);
     setHardLimitErrors(errors);
@@ -583,6 +652,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   }
 
   function handleLlmCallsChange(v: string) {
+    setIsDirty(true);
     setLlmCallsRaw(v);
     const errors = validateHardLimits(toolCallsRaw, v, execTimeRaw);
     setHardLimitErrors(errors);
@@ -590,6 +660,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   }
 
   function handleExecTimeChange(v: string) {
+    setIsDirty(true);
     setExecTimeRaw(v);
     const errors = validateHardLimits(toolCallsRaw, llmCallsRaw, v);
     setHardLimitErrors(errors);
@@ -603,7 +674,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           type="button"
           className="settings-back button-muted"
           aria-label="Back to chat"
-          onClick={onClose}
+          onClick={handleClose}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M19 12H5" />
@@ -613,7 +684,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         </button>
         <h1 className="settings-title">Settings</h1>
         {data && (
-          <span className="settings-config-id">config {data.id.slice(0, 8)}</span>
+          <span className="settings-config-id">
+            {data.schema_version} · {data.id.slice(0, 8)}
+          </span>
         )}
       </header>
 
@@ -622,6 +695,28 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
       {!isLoading && !isError && (
         <div className="settings-body">
+          {saveSuccess && (
+            <div className="settings-success-toast" role="status">
+              <svg className="settings-success-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Settings saved successfully.
+            </div>
+          )}
+          {saveError && (
+            <div className="settings-error-banner" role="alert">
+              <span className="settings-error-banner-text">{saveError}</span>
+              <button
+                type="button"
+                className="settings-error-dismiss"
+                aria-label="Dismiss error"
+                onClick={() => setSaveError(null)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           <div className="settings-sections">
             <SettingsSection
               title="Model Configuration"
@@ -696,6 +791,25 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 onExecTimeChange={handleExecTimeChange}
               />
             </SettingsSection>
+          </div>
+
+          <div className="settings-save-bar">
+            {isDirty && <span className="settings-dirty-hint">Unsaved changes</span>}
+            <button
+              type="button"
+              className="settings-save-btn"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <span className="settings-save-spinner" aria-hidden="true" />
+                  Saving…
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
           </div>
         </div>
       )}
