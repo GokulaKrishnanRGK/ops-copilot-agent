@@ -11,6 +11,7 @@ from .nodes.planner_node import Plan, PlanStep, PlannerNode, plan
 from .runtime import AgentRuntime
 from .nodes.tool_executor_node import ToolExecutorNode, ToolResult, execute_plan
 from .nodes.scope_check_node import ScopeCheckNode
+from .nodes.injection_guard_node import PromptInjectionGuard
 from .state import AgentState
 from .persistence import AgentRunRecorder
 from .prompts import LangfusePromptSource, LocalYamlPromptSource, PromptSource, prompt_source_from_env
@@ -42,6 +43,7 @@ __all__ = [
     "AgentRunRecorder",
     "AgentState",
     "ScopeCheckNode",
+    "PromptInjectionGuard",
     "ToolRegistry",
     "LocalYamlPromptSource",
     "LangfusePromptSource",

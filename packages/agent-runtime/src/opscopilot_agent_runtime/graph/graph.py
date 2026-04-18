@@ -13,6 +13,7 @@ ToolExecutorFn = Callable[[AgentState], AgentState]
 CriticFn = Callable[[AgentState], AgentState]
 AnswerFn = Callable[[AgentState], AgentState]
 ScopeCheckFn = Callable[[AgentState], AgentState]
+InjectionGuardFn = Callable[[AgentState], AgentState]
 
 
 def _wrap(
@@ -38,9 +39,19 @@ class AgentGraph:
     answer: AnswerFn | None = None
     critic: CriticFn | None = None
     tool_registry: ToolRegistry | None = None
+    injection_guard: InjectionGuardFn | None = None
+
+    def _entry_point(self) -> str:
+        if self.injection_guard:
+            return "injection_guard"
+        if self.scope_check:
+            return "scope_check"
+        return "planner"
 
     def build(self):
         graph = StateGraph(dict)
+        if self.injection_guard:
+            graph.add_node("injection_guard", _wrap(self.injection_guard, self.tool_registry))
         if self.scope_check:
             graph.add_node("scope_check", _wrap(self.scope_check, self.tool_registry))
         graph.add_node("planner", _wrap(self.planner, self.tool_registry))
@@ -49,7 +60,9 @@ class AgentGraph:
         graph.add_node("tool_executor", _wrap(self.tool_executor, self.tool_registry))
         if self.answer:
             graph.add_node("answer", _wrap(self.answer, self.tool_registry))
-        graph.set_entry_point("scope_check" if self.scope_check else "planner")
+        graph.set_entry_point(self._entry_point())
+        if self.injection_guard:
+            graph.add_edge("injection_guard", "scope_check" if self.scope_check else "planner")
         if self.scope_check:
             graph.add_edge("scope_check", "planner")
         if self.clarifier:
