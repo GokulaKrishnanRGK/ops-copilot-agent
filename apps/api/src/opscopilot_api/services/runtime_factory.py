@@ -32,27 +32,6 @@ from opscopilot_llm_gateway.providers.bedrock import BedrockProvider
 from opscopilot_observability import configure_langfuse
 
 
-def _read_int(name: str, default_value: int) -> int:
-    value = os.getenv(name)
-    if value is None:
-        return default_value
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise RuntimeError(f"{name} must be an integer") from exc
-
-
-def _read_sample_rate() -> float:
-    value = os.getenv("EVAL_SAMPLE_RATE", "0.1")
-    try:
-        sample_rate = float(value)
-    except ValueError as exc:
-        raise RuntimeError("EVAL_SAMPLE_RATE must be a number") from exc
-    if sample_rate < 0 or sample_rate > 1:
-        raise RuntimeError("EVAL_SAMPLE_RATE must be between 0 and 1")
-    return sample_rate
-
-
 class SampledAnswerScorer:
     def __init__(
         self,
@@ -70,25 +49,23 @@ class SampledAnswerScorer:
         self._scorer(state)
 
 
-def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledger: CostLedger):
-    sample_rate = _read_sample_rate()
-    if sample_rate == 0:
+def _build_answer_scorer(config: RuntimeConfigData, provider: BedrockProvider, budget: BudgetEnforcer, ledger: CostLedger):
+    if config.eval_sample_rate == 0:
         return None
     if not os.getenv("LANGFUSE_HOST"):
         return None
     langfuse = configure_langfuse()
     judge_scorer = None
     ragas_scorer = None
-    if os.getenv("EVAL_LLM_JUDGE_ENABLED", "1") != "0":
-        model_id = os.getenv("EVAL_JUDGE_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+    if config.eval_llm_judge_enabled:
         judge_scorer = LlmJudgeScorer(
             provider=provider,
-            model_id=model_id,
+            model_id=config.eval_judge_model_id,
             budget=budget,
             ledger=ledger,
             langfuse=langfuse,
         )
-    if os.getenv("EVAL_RAGAS_ENABLED", "1") != "0":
+    if config.eval_ragas_enabled:
         ragas_scorer = RagasScorer(langfuse=langfuse)
     if judge_scorer is None and ragas_scorer is None:
         return None
@@ -122,7 +99,7 @@ def _build_answer_scorer(provider: BedrockProvider, budget: BudgetEnforcer, ledg
                 trace_id=state.langfuse_trace_id,
             )
 
-    return SampledAnswerScorer(score_state, sample_rate)
+    return SampledAnswerScorer(score_state, config.eval_sample_rate)
 
 
 class RuntimeFactory:
@@ -140,12 +117,12 @@ class RuntimeFactory:
         prompt_source = prompt_source_from_env()
         limits = ExecutionLimits(
             max_agent_steps=config.max_agent_steps,
-            max_tool_calls=_read_int("AGENT_MAX_TOOL_CALLS", 10),
-            max_llm_calls=_read_int("AGENT_MAX_LLM_CALLS", 10),
-            max_execution_time_ms=_read_int("AGENT_MAX_EXECUTION_TIME_MS", 30_000),
+            max_tool_calls=config.agent_max_tool_calls,
+            max_llm_calls=config.agent_max_llm_calls,
+            max_execution_time_ms=config.agent_max_execution_time_ms,
         )
         injection_classifier = None
-        if os.getenv("PROMPT_INJECTION_LLM_CHECK", "0") == "1":
+        if config.prompt_injection_llm_check:
             injection_classifier = LlmInjectionClassifier(
                 provider=provider,
                 model_id=config.node("injection_classifier").model_id,
@@ -222,7 +199,7 @@ class RuntimeFactory:
             recorder=recorder,
             budget_max_usd=budget_max_usd,
             runtime_config_id=config.id,
-            answer_scorer=_build_answer_scorer(provider, budget, ledger),
+            answer_scorer=_build_answer_scorer(config, provider, budget, ledger),
             summarizer=summarizer_node,
             summary_store=summary_store,
             history_window_turns=config.history_window_turns,

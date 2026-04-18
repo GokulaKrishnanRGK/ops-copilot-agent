@@ -1,19 +1,24 @@
-import pytest
-
-from opscopilot_api.services.runtime_factory import SampledAnswerScorer, _build_answer_scorer, _read_sample_rate
-
-
-def test_read_sample_rate_defaults_to_ten_percent(monkeypatch):
-    monkeypatch.delenv("EVAL_SAMPLE_RATE", raising=False)
-
-    assert _read_sample_rate() == 0.1
+from opscopilot_api.config_cache import NodeConfig, RuntimeConfigData
+from opscopilot_api.services.runtime_factory import SampledAnswerScorer, _build_answer_scorer
 
 
-def test_read_sample_rate_rejects_invalid_values(monkeypatch):
-    monkeypatch.setenv("EVAL_SAMPLE_RATE", "1.5")
-
-    with pytest.raises(RuntimeError, match="between 0 and 1"):
-        _read_sample_rate()
+def _make_config(**overrides) -> RuntimeConfigData:
+    defaults = dict(
+        id="test",
+        schema_version="v1",
+        nodes={
+            "scope": NodeConfig(model_id="m", prompt_version="latest"),
+            "planner": NodeConfig(model_id="m", prompt_version="latest"),
+            "clarifier": NodeConfig(model_id="m", prompt_version="latest"),
+            "answer": NodeConfig(model_id="m", prompt_version="latest"),
+            "summarizer": NodeConfig(model_id="m", prompt_version="latest"),
+            "injection_classifier": NodeConfig(model_id="m", prompt_version="latest"),
+        },
+        max_agent_steps=10,
+        max_budget_usd=None,
+    )
+    defaults.update(overrides)
+    return RuntimeConfigData(**defaults)
 
 
 def test_sampled_answer_scorer_skips_when_random_value_exceeds_rate():
@@ -35,9 +40,9 @@ def test_sampled_answer_scorer_invokes_when_random_value_is_under_rate():
 
 
 def test_build_answer_scorer_disables_sampling_at_zero(monkeypatch):
-    monkeypatch.setenv("EVAL_SAMPLE_RATE", "0")
     monkeypatch.setenv("LANGFUSE_HOST", "http://langfuse.local")
+    config = _make_config(eval_sample_rate=0.0)
 
-    scorer = _build_answer_scorer(provider=None, budget=None, ledger=None)
+    scorer = _build_answer_scorer(config, provider=None, budget=None, ledger=None)
 
     assert scorer is None

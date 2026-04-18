@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session
 
 from opscopilot_db import models
@@ -16,3 +19,17 @@ class RuntimeConfigRepo:
             .order_by(models.RuntimeConfig.updated_at.desc())
             .first()
         )
+
+    def create(self, config_json: dict, schema_version: str) -> models.RuntimeConfig:
+        now = datetime.now(timezone.utc)
+        row = models.RuntimeConfig(
+            id=str(uuid.uuid4()),
+            schema_version=schema_version,
+            config_json=config_json,
+            created_at=now,
+            updated_at=now,
+        )
+        self._db.add(row)
+        self._db.commit()
+        self._db.refresh(row)
+        return row
