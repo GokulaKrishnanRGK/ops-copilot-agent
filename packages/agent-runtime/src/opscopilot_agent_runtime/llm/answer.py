@@ -101,6 +101,7 @@ class AnswerSynthesizer(LlmNodeBase):
                     LlmMessage(
                         role="system",
                         content=stream_prompt,
+                        cache_control={"type": "ephemeral"},
                     ),
                     LlmMessage(role="user", content=user_content),
                 ],
@@ -131,6 +132,7 @@ class AnswerSynthesizer(LlmNodeBase):
                 LlmMessage(
                     role="system",
                     content=system_prompt,
+                    cache_control={"type": "ephemeral"},
                 ),
                 LlmMessage(role="user", content=user_content),
             ],

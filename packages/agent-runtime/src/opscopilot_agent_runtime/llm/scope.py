@@ -55,7 +55,7 @@ class ScopeClassifier(LlmNodeBase):
         request = LlmRequest(
             model_id=self._model_id,
             messages=[
-                LlmMessage(role="system", content=system_prompt),
+                LlmMessage(role="system", content=system_prompt, cache_control={"type": "ephemeral"}),
                 LlmMessage(
                     role="user",
                     content=json.dumps(payload),
