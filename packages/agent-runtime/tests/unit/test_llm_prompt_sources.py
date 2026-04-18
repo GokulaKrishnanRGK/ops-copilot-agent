@@ -84,9 +84,20 @@ def test_scope_classifier_uses_prompt_source():
     )
 
     with patch("litellm.completion", return_value=_mock_litellm_json({"allowed": True, "response": ""})) as completion:
-        classifier.classify("list pods", ["k8s.list_pods"])
+        classifier.classify("list pods", ["k8s.list_pods: List pods in a namespace"])
 
     assert completion.call_args.kwargs["messages"][0]["content"] == "Scope prompt from source."
+
+
+
+def test_scope_classifier_default_prompt_version_is_v2():
+    classifier = ScopeClassifier(
+        provider=_provider(),
+        model_id="anthropic.claude-3-sonnet",
+        budget=_budget(),
+        ledger=CostLedger(),
+    )
+    assert classifier._prompt_version == "v2"
 
 
 def test_clarifier_uses_prompt_source():

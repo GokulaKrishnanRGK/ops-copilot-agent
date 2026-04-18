@@ -43,7 +43,7 @@ class ScopeClassifier(LlmNodeBase):
         ledger: CostLedger,
         recorder: AgentRunRecorder | None = None,
         prompt_source: PromptSource | None = None,
-        prompt_version: str = "v1",
+        prompt_version: str = "v2",
     ) -> None:
         super().__init__(provider, model_id, budget, ledger)
         self._recorder = recorder
@@ -59,7 +59,7 @@ class ScopeClassifier(LlmNodeBase):
         prompt_source: PromptSource | None = None,
     ) -> "ScopeClassifier":
         model_id = _read_env("SCOPE_MODEL_ID")
-        prompt_version = os.getenv("SCOPE_PROMPT_VERSION", "v1")
+        prompt_version = os.getenv("SCOPE_PROMPT_VERSION", "v2")
         return ScopeClassifier(
             provider,
             model_id,
@@ -78,7 +78,7 @@ class ScopeClassifier(LlmNodeBase):
         on_delta: Callable[[str], None] | None = None,
     ) -> dict:
         system_prompt = self._prompt_source.get("scope", self._prompt_version)
-        payload = {"prompt": prompt, "tools": tool_descriptions}
+        payload = {"prompt": prompt, "tool_descriptions": tool_descriptions}
         request = LlmRequest(
             model_id=self._model_id,
             messages=[
