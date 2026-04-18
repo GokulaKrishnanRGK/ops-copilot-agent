@@ -61,7 +61,7 @@ def _make_runtime(clarifier: _TurnAwareClarifier) -> AgentRuntime:
     client = _FakeMCPClient()
     graph = AgentGraph(
         tool_registry=ToolRegistry(client=client),
-        scope_check=ScopeCheckNode(classifier=None, rag_retriever=None),
+        scope_check=ScopeCheckNode(classifier=None),
         planner=PlannerNode(llm_planner=_StaticPlanner()),
         clarifier=ClarifierNode(clarifier=clarifier),
         tool_executor=ToolExecutorNode(client=client),
