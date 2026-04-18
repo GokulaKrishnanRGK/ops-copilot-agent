@@ -75,11 +75,14 @@ def execute_plan(plan: Plan, client: MCPClient, recorder: AgentRunRecorder | Non
             tool_call_latency_ms.record(latency_ms, metric_attrs)
             if status != "success":
                 tool_call_errors_total.add(1, {"tool_name": step.tool_name})
+        response_str = json.dumps(response, default=str)
         logger.debug(
-            "tool_executor result step=%s tool=%s response=%s",
+            "tool_executor result step=%s tool=%s status=%s response_bytes=%d response=%s",
             step.step_id,
             step.tool_name,
-            json.dumps(response, default=str),
+            status,
+            len(response_str),
+            response_str[:500] + ("…" if len(response_str) > 500 else ""),
         )
         if recorder:
             recorder.record_tool_call(step.tool_name, step.args, response)
@@ -95,12 +98,27 @@ class ToolExecutorNode:
         self._recorder = recorder
 
     def __call__(self, state: AgentState) -> AgentState:
+        logger = get_logger(__name__)
         if state.error:
+            logger.debug("tool_executor: skipped existing_error=%s", state.error.get("type"))
             return state
         if state.plan is None:
             raise RuntimeError("plan_missing")
+        logger.debug(
+            "tool_executor: enter step_count=%d tools=%s",
+            len(state.plan.steps),
+            [s.tool_name for s in state.plan.steps],
+        )
         recorder = self._recorder or state.recorder
         results = execute_plan(state.plan, self._client, recorder)
+        statuses = [
+            r.result.get("structured_content", {}).get("status", "unknown") for r in results
+        ]
+        logger.debug(
+            "tool_executor: exit result_count=%d statuses=%s",
+            len(results),
+            statuses,
+        )
         return state.merge(
             tool_results=results,
             event=AgentEvent(event_type="tool_executor.completed", payload={"steps": len(results)}),

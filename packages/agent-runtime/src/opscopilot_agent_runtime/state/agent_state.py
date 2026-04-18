@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class AgentState:
     prompt: str | None = None
+    user_prompt: str | None = None
     prompt_history: list[str] | None = None
+    prompt_summary: str | None = None
     plan: Plan | None = None
     tool_results: list[ToolResult] | None = None
     answer: str | None = None
@@ -42,7 +44,9 @@ class AgentState:
     def to_dict(self) -> dict:
         return {
             "prompt": self.prompt,
+            "user_prompt": self.user_prompt,
             "prompt_history": self.prompt_history,
+            "prompt_summary": self.prompt_summary,
             "plan": self.plan,
             "tool_results": self.tool_results,
             "answer": self.answer,
@@ -66,7 +70,9 @@ class AgentState:
     def from_dict(cls, payload: dict) -> "AgentState":
         return cls(
             prompt=payload.get("prompt"),
+            user_prompt=payload.get("user_prompt"),
             prompt_history=payload.get("prompt_history"),
+            prompt_summary=payload.get("prompt_summary"),
             plan=payload.get("plan"),
             tool_results=payload.get("tool_results"),
             answer=payload.get("answer"),

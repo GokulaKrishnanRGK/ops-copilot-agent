@@ -46,8 +46,12 @@ class PlannerNode:
         self,
         llm_planner: LlmPlanner | None = None,
         rag_retriever: RagRetriever | None = None,
+        max_steps: int | None = None,
+        max_llm_calls: int | None = None,
     ) -> None:
         self._llm_planner = llm_planner
+        self._max_steps = max_steps
+        self._max_llm_calls = max_llm_calls
         if rag_retriever is None:
             try:
                 rag_retriever = RagRetriever.from_env()
@@ -71,12 +75,17 @@ class PlannerNode:
         )
         if next_state.prompt and self._rag_retriever and next_state.rag is None:
             try:
-                logger.debug("planner: retrieving rag context")
+                logger.debug("planner: rag_retrieval start prompt_len=%d", len(next_state.prompt))
                 rag_context = self._rag_retriever.retrieve(
                     next_state.prompt,
                     recorder=next_state.recorder,
                 )
                 next_state = next_state.merge(rag=rag_context)
+                logger.debug(
+                    "planner: rag_retrieval done result_count=%d text_len=%d",
+                    len(rag_context.results) if rag_context else 0,
+                    len(rag_context.text) if rag_context else 0,
+                )
             except Exception as exc:
                 logger = get_logger(__name__)
                 logger.info("rag retrieval skipped: %s", exc)
@@ -85,6 +94,13 @@ class PlannerNode:
                 {"name": tool.name, "description": tool.description or ""}
                 for tool in (tools or [])
             ]
+            logger.debug(
+                "planner: llm_plan start tool_count=%d max_steps=%s max_llm_calls=%s tools=%s",
+                len(tool_specs),
+                self._max_steps,
+                self._max_llm_calls,
+                [t["name"] for t in tool_specs],
+            )
             on_delta = None
             if next_state.llm_stream_callback is not None:
                 on_delta = lambda text: next_state.llm_stream_callback("planner", text)
@@ -93,6 +109,13 @@ class PlannerNode:
                 tool_specs,
                 recorder=next_state.recorder,
                 on_delta=on_delta,
+                max_steps=self._max_steps,
+                max_llm_calls=self._max_llm_calls,
+            )
+            logger.debug(
+                "planner: llm_plan done steps=%d selected_tools=%s",
+                len(plan_obj.steps),
+                [s.tool_name for s in plan_obj.steps],
             )
             event = AgentEvent(
                 event_type="planner.completed",

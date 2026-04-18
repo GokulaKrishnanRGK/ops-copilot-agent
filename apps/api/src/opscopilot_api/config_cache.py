@@ -19,6 +19,8 @@ class RuntimeConfigData:
     nodes: dict[str, NodeConfig]
     max_agent_steps: int
     max_budget_usd: float | None
+    history_window_turns: int = 6
+    summarizer_prompt_version: str = "latest"
 
     def node(self, name: str) -> NodeConfig:
         try:
@@ -44,6 +46,8 @@ class RuntimeConfigData:
             nodes=nodes,
             max_agent_steps=int(limits.get("max_agent_steps", 10)),
             max_budget_usd=float(max_budget_raw) if max_budget_raw is not None else None,
+            history_window_turns=int(limits.get("history_window_turns", 6)),
+            summarizer_prompt_version=str(limits.get("summarizer_prompt_version", "latest")),
         )
 
 

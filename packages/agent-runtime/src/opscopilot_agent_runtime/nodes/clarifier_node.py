@@ -62,11 +62,21 @@ class ClarifierNode:
                     },
                 }
             )
+        _logger.debug(
+            "clarifier: schema_built tool_count=%d tools=%s",
+            len(tool_payload),
+            [{t["name"]: t["input_schema"]["required"]} for t in tool_payload],
+        )
         on_delta = None
         if state.llm_stream_callback is not None:
             on_delta = lambda text: state.llm_stream_callback("clarifier_question", text)
         payload = self._clarifier.clarify(state, tool_payload, on_delta=on_delta)
-        _logger.debug("clarifier: action=%s", payload.get("action"))
+        _logger.debug(
+            "clarifier: llm_response action=%s missing_fields=%s steps=%d",
+            payload.get("action"),
+            payload.get("missing_fields"),
+            len(payload.get("steps") or []),
+        )
         if payload.get("action") == "clarify":
             question = payload.get("clarify_question")
             if not isinstance(question, str) or not question.strip():
@@ -127,8 +137,14 @@ class ClarifierNode:
             )
         tool_map = {tool.name: tool for tool in tools}
         for step in steps:
+            _logger.debug(
+                "clarifier: validate_step tool=%s args=%s",
+                step.tool_name,
+                list(step.args.keys()),
+            )
             tool = tool_map.get(step.tool_name)
             if tool is None:
+                _logger.debug("clarifier: tool_not_found tool=%s", step.tool_name)
                 question = self._clarifier.generate_clarify_question(
                     prompt=state.prompt or "",
                     missing_fields=[],
@@ -149,6 +165,14 @@ class ClarifierNode:
             allowed = _allowed_fields(tool.input_schema)
             missing = sorted(field for field in required if field not in step.args)
             extra = sorted(field for field in step.args.keys() if field not in allowed)
+            _logger.debug(
+                "clarifier: field_check tool=%s required=%s provided=%s missing=%s extra=%s",
+                step.tool_name,
+                sorted(required),
+                sorted(step.args.keys()),
+                missing,
+                extra,
+            )
             if missing:
                 question = self._clarifier.generate_clarify_question(
                     prompt=state.prompt or "",

@@ -157,6 +157,22 @@ def test_push_prompts_to_langfuse_creates_text_prompts(tmp_path):
             "name": "scope",
             "type": "text",
             "prompt": "Scope prompt.",
-            "labels": ["v1"],
+            "labels": ["v1", "latest"],
         }
     ]
+
+
+def test_push_prompts_to_langfuse_latest_label_on_last_version(tmp_path):
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "answer.yaml").write_text(
+        "name: answer\nversions:\n  v1: |\n    Answer v1.\n  v2: |\n    Answer v2.\n",
+        encoding="utf-8",
+    )
+    client = FakeLangfusePushClient()
+
+    push_prompts_to_langfuse(client=client, prompts_dir=prompts_dir)
+
+    labels_by_version = {c["labels"][0]: c["labels"] for c in client.created}
+    assert labels_by_version["v1"] == ["v1"]
+    assert labels_by_version["v2"] == ["v2", "latest"]

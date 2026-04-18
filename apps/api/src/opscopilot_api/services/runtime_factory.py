@@ -21,6 +21,8 @@ from opscopilot_agent_runtime import (
     ToolRegistry,
     prompt_source_from_env,
 )
+from opscopilot_agent_runtime.history import PostgresSummaryStore
+from opscopilot_agent_runtime.llm.summarizer import SummarizerLlmNode
 from opscopilot_agent_runtime.persistence import AgentRunRecorder
 from opscopilot_api.config_cache import RuntimeConfigData
 from opscopilot_eval import LlmJudgeScorer, RagasScorer
@@ -136,6 +138,12 @@ class RuntimeFactory:
         ledger = CostLedger()
         client = MCPClient.from_env()
         prompt_source = prompt_source_from_env()
+        limits = ExecutionLimits(
+            max_agent_steps=config.max_agent_steps,
+            max_tool_calls=_read_int("AGENT_MAX_TOOL_CALLS", 10),
+            max_llm_calls=_read_int("AGENT_MAX_LLM_CALLS", 10),
+            max_execution_time_ms=_read_int("AGENT_MAX_EXECUTION_TIME_MS", 30_000),
+        )
         injection_classifier = None
         if os.getenv("PROMPT_INJECTION_LLM_CHECK", "0") == "1":
             injection_classifier = LlmInjectionClassifier(
@@ -170,7 +178,9 @@ class RuntimeFactory:
                     recorder=recorder,
                     prompt_source=prompt_source,
                     prompt_version=config.node("planner").prompt_version,
-                )
+                ),
+                max_steps=limits.max_agent_steps,
+                max_llm_calls=limits.max_llm_calls,
             ),
             clarifier=ClarifierNode(
                 clarifier=LlmClarifier(
@@ -196,12 +206,16 @@ class RuntimeFactory:
             ),
             critic=None,
         )
-        limits = ExecutionLimits(
-            max_agent_steps=config.max_agent_steps,
-            max_tool_calls=_read_int("AGENT_MAX_TOOL_CALLS", 10),
-            max_llm_calls=_read_int("AGENT_MAX_LLM_CALLS", 10),
-            max_execution_time_ms=_read_int("AGENT_MAX_EXECUTION_TIME_MS", 30_000),
+        summarizer_node = SummarizerLlmNode(
+            provider=provider,
+            model_id=config.node("summarizer").model_id,
+            budget=budget,
+            ledger=ledger,
+            prompt_source=prompt_source,
+            prompt_version=config.summarizer_prompt_version,
         )
+        from opscopilot_db.connection import get_sessionmaker
+        summary_store = PostgresSummaryStore(get_sessionmaker())
         return AgentRuntime(
             graph=graph,
             limits=limits,
@@ -209,4 +223,7 @@ class RuntimeFactory:
             budget_max_usd=budget_max_usd,
             runtime_config_id=config.id,
             answer_scorer=_build_answer_scorer(provider, budget, ledger),
+            summarizer=summarizer_node,
+            summary_store=summary_store,
+            history_window_turns=config.history_window_turns,
         )

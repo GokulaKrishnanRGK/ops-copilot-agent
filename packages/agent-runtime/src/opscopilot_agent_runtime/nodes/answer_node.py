@@ -91,9 +91,19 @@ class AnswerNode:
             if state.rag is None:
                 raise RuntimeError("tool_results required")
             results = []
-        _logger.debug("answer: enter prompt_len=%d tool_results=%d rag_present=%s streaming=%s",
-            len(prompt), len(results), bool(state.rag), bool(state.llm_stream_callback or state.stream_callback))
+        result_sizes = [
+            len(json.dumps(getattr(r, "result", r), default=str)) for r in results
+        ]
+        _logger.debug(
+            "answer: enter prompt_len=%d tool_results=%d result_sizes=%s rag_present=%s streaming=%s",
+            len(prompt),
+            len(results),
+            result_sizes,
+            bool(state.rag),
+            bool(state.llm_stream_callback or state.stream_callback),
+        )
         llm_results = self._sanitize_tool_results(results)
+        _logger.debug("answer: sanitized_results=%d", len(llm_results))
         on_delta = None
         if state.llm_stream_callback is not None:
             on_delta = lambda text: state.llm_stream_callback("answer", text)

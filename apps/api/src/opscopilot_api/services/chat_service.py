@@ -64,7 +64,8 @@ class ChatService:
 
     def _load_prompt_history(self, session_id: str) -> list[str]:
         messages = list(self._message_repo.list_by_session(session_id))
-        history: list[str] = []
+        completed_turns: list[str] = []
+        clarification_chain: list[str] = []
         pending_user_prompt: str | None = None
         for message in messages:
             content = (message.content or "").strip()
@@ -83,12 +84,12 @@ class ChatService:
                 isinstance(error, dict) and error.get("type") == "clarification_required"
             )
             if is_clarification:
-                history.append(pending_user_prompt)
+                clarification_chain.append(pending_user_prompt)
             else:
-                # A non-clarification assistant response closes any prior clarification chain.
-                history = []
+                completed_turns.append(f"User: {pending_user_prompt}\nAssistant: {content}")
+                clarification_chain = []
             pending_user_prompt = None
-        return history
+        return completed_turns + clarification_chain
 
     @staticmethod
     def _is_clarification(result_error: dict | None) -> bool:

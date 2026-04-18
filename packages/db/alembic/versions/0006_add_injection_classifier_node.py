@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0006_add_injection_classifier_node"
+revision = "0006_injection_classifier"
 down_revision = "0005_prompt_version_latest"
 branch_labels = None
 depends_on = None

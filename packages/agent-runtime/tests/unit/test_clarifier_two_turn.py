@@ -31,7 +31,7 @@ class _FakeMCPClient:
 
 
 class _StaticPlanner:
-    def plan(self, prompt, tool_names, recorder=None, on_delta=None):  # noqa: ARG002
+    def plan(self, prompt, tool_names, recorder=None, on_delta=None, max_steps=None, max_llm_calls=None):  # noqa: ARG002
         return Plan(steps=[PlanStep(step_id="step-1", tool_name="k8s.list_pods", args={"namespace": "default"})])
 
 

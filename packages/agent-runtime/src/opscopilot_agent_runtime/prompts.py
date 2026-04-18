@@ -164,12 +164,18 @@ def push_prompts_to_langfuse(
 ) -> int:
     resolved_client = client or LangfusePromptSource()._client
     definitions = load_local_prompt_definitions(prompts_dir)
-    for definition in definitions:
+    latest_index: dict[str, int] = {}
+    for i, definition in enumerate(definitions):
+        latest_index[definition.name] = i
+    for i, definition in enumerate(definitions):
+        labels = [definition.version]
+        if latest_index[definition.name] == i:
+            labels.append("latest")
         resolved_client.create_prompt(
             name=definition.name,
             type="text",
             prompt=definition.text,
-            labels=[definition.version],
+            labels=labels,
         )
     return len(definitions)
 

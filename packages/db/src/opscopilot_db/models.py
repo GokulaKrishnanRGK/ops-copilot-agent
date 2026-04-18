@@ -11,6 +11,7 @@ class Session(Base):
     created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[str] = mapped_column(DateTime, nullable=False)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
+    prompt_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Message(Base):

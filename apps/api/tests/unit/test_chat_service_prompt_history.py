@@ -46,7 +46,7 @@ def _add_message(
     )
 
 
-def test_prompt_history_excludes_completed_threads(testing_session_local) -> None:
+def test_prompt_history_preserves_completed_qa_pairs(testing_session_local) -> None:
     db = testing_session_local()
     try:
         session_repo = SessionRepo(db=db)
@@ -77,7 +77,8 @@ def test_prompt_history_excludes_completed_threads(testing_session_local) -> Non
         )
 
         service = ChatService(session_repo, message_repo, _NoopRuntimeFactory())
-        assert service._load_prompt_history(session_id) == []
+        history = service._load_prompt_history(session_id)
+        assert history == ["User: q1\nAssistant: a1", "User: q2\nAssistant: a2"]
     finally:
         db.close()
 
@@ -143,7 +144,7 @@ def test_prompt_history_keeps_multiple_clarification_turns(testing_session_local
         db.close()
 
 
-def test_prompt_history_resets_after_clarification_is_answered(testing_session_local) -> None:
+def test_prompt_history_clears_clarification_chain_after_answer(testing_session_local) -> None:
     db = testing_session_local()
     try:
         session_repo = SessionRepo(db=db)
@@ -173,6 +174,63 @@ def test_prompt_history_resets_after_clarification_is_answered(testing_session_l
             content="final answer",
             created_at=t0 + timedelta(seconds=3),
         )
+
+        service = ChatService(session_repo, message_repo, _NoopRuntimeFactory())
+        history = service._load_prompt_history(session_id)
+        assert history == ["User: clarification response\nAssistant: final answer"]
+        assert not any("q1" in h for h in history)
+    finally:
+        db.close()
+
+
+def test_prompt_history_completed_turns_plus_active_clarification(testing_session_local) -> None:
+    """Completed Q&A pairs are preserved and combined with the active clarification chain."""
+    db = testing_session_local()
+    try:
+        session_repo = SessionRepo(db=db)
+        message_repo = MessageRepo(db=db)
+        session_id = _create_session(session_repo)
+        t0 = datetime.now(timezone.utc)
+        _add_message(message_repo, session_id=session_id, role="user", content="list pods in opscopilot-demo", created_at=t0)
+        _add_message(
+            message_repo,
+            session_id=session_id,
+            role="assistant",
+            content="There are 2 pods: pod-a, pod-b",
+            created_at=t0 + timedelta(seconds=1),
+        )
+        _add_message(
+            message_repo,
+            session_id=session_id,
+            role="user",
+            content="get logs from pod-a",
+            created_at=t0 + timedelta(seconds=2),
+        )
+        _add_message(
+            message_repo,
+            session_id=session_id,
+            role="assistant",
+            content="Which namespace?",
+            created_at=t0 + timedelta(seconds=3),
+            metadata_json={"clarification_required": True},
+        )
+
+        service = ChatService(session_repo, message_repo, _NoopRuntimeFactory())
+        history = service._load_prompt_history(session_id)
+        assert history == [
+            "User: list pods in opscopilot-demo\nAssistant: There are 2 pods: pod-a, pod-b",
+            "get logs from pod-a",
+        ]
+    finally:
+        db.close()
+
+
+def test_prompt_history_empty_for_new_session(testing_session_local) -> None:
+    db = testing_session_local()
+    try:
+        session_repo = SessionRepo(db=db)
+        message_repo = MessageRepo(db=db)
+        session_id = _create_session(session_repo)
 
         service = ChatService(session_repo, message_repo, _NoopRuntimeFactory())
         assert service._load_prompt_history(session_id) == []

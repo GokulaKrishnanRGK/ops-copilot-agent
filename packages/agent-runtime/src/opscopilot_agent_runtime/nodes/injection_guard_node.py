@@ -53,9 +53,10 @@ class PromptInjectionGuard:
         if state.error or not state.prompt:
             _logger.debug("injection_guard: skipped error=%s prompt_present=%s", bool(state.error), bool(state.prompt))
             return state
-        _logger.debug("injection_guard: enter prompt_len=%d", len(state.prompt))
+        scan_target = state.user_prompt if state.user_prompt is not None else state.prompt
+        _logger.debug("injection_guard: enter prompt_len=%d scan_len=%d", len(state.prompt), len(scan_target))
         for pattern in self._patterns:
-            if pattern.search(state.prompt):
+            if pattern.search(scan_target):
                 _logger.warning("injection_guard: blocked layer=regex pattern=%s", pattern.pattern)
                 return state.merge(
                     answer=_REJECTION_MESSAGE,
@@ -68,7 +69,7 @@ class PromptInjectionGuard:
                         "message": _REJECTION_MESSAGE,
                     },
                 )
-        if self._classifier is not None and self._classifier.classify(state.prompt, recorder=state.recorder):
+        if self._classifier is not None and self._classifier.classify(scan_target, recorder=state.recorder):
             _logger.warning("injection_guard: blocked layer=llm_classifier")
             return state.merge(
                 answer=_REJECTION_MESSAGE,

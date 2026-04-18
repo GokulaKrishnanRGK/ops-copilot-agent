@@ -47,6 +47,18 @@ def _plan_schema() -> dict:
     }
 
 
+def _prompt_block(prompt: str, max_steps: int | None, max_llm_calls: int | None) -> str:
+    payload: dict = {"prompt": wrap_user_input(prompt)}
+    budget: dict = {}
+    if max_steps is not None:
+        budget["max_steps"] = max_steps
+    if max_llm_calls is not None:
+        budget["max_llm_calls"] = max_llm_calls
+    if budget:
+        payload["budget"] = budget
+    return json.dumps(payload)
+
+
 class LlmPlanner(LlmNodeBase):
     def __init__(
         self,
@@ -69,6 +81,8 @@ class LlmPlanner(LlmNodeBase):
         tools: list[dict[str, str]],
         recorder: AgentRunRecorder | None = None,
         on_delta: Callable[[str], None] | None = None,
+        max_steps: int | None = None,
+        max_llm_calls: int | None = None,
     ) -> Plan:
         system_prompt = self._prompt_source.get("planner", self._prompt_version)
         request = LlmRequest(
@@ -79,7 +93,7 @@ class LlmPlanner(LlmNodeBase):
                     role="user",
                     content=[
                         {"type": "text", "text": json.dumps({"tools": tools}), "cache_control": {"type": "ephemeral"}},
-                        {"type": "text", "text": json.dumps({"prompt": wrap_user_input(prompt)})},
+                        {"type": "text", "text": _prompt_block(prompt, max_steps, max_llm_calls)},
                     ],
                 ),
             ],
