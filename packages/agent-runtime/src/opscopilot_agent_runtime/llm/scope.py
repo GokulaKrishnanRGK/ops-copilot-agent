@@ -73,12 +73,12 @@ class ScopeClassifier(LlmNodeBase):
     def classify(
         self,
         prompt: str,
-        tool_names: list[str],
+        tool_descriptions: list[str],
         recorder: AgentRunRecorder | None = None,
         on_delta: Callable[[str], None] | None = None,
     ) -> dict:
         system_prompt = self._prompt_source.get("scope", self._prompt_version)
-        payload = {"prompt": prompt, "tools": tool_names}
+        payload = {"prompt": prompt, "tools": tool_descriptions}
         request = LlmRequest(
             model_id=self._model_id,
             messages=[

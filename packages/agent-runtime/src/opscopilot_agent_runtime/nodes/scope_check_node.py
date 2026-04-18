@@ -18,13 +18,15 @@ class ScopeCheckNode:
         logger = get_logger(__name__)
         logger.debug("scope_check: prompt_present=%s", bool(state.prompt))
         tools = state.tools or []
-        tool_names = [tool.name for tool in tools]
+        tool_descriptions = [
+            f"{t.name}: {t.description}" if t.description else t.name for t in tools
+        ]
         on_delta = None
         if state.llm_stream_callback is not None:
             on_delta = lambda text: state.llm_stream_callback("scope", text)
         payload = self._classifier.classify(
             state.prompt,
-            tool_names,
+            tool_descriptions,
             recorder=state.recorder,
             on_delta=on_delta,
         )

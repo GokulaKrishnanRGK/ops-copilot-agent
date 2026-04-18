@@ -1,7 +1,5 @@
 from unittest.mock import patch
 
-import pytest
-
 from opscopilot_agent_runtime.mcp_client import MCPTool
 from opscopilot_agent_runtime.nodes.scope_check_node import ScopeCheckNode
 from opscopilot_agent_runtime.state import AgentState
@@ -13,13 +11,13 @@ class _FakeClassifier:
         self._allowed = allowed
         self._response = response
 
-    def classify(self, prompt, tool_names, recorder=None, on_delta=None):
-        self.calls.append({"prompt": prompt, "tool_names": tool_names})
+    def classify(self, prompt, tool_descriptions, recorder=None, on_delta=None):
+        self.calls.append({"prompt": prompt, "tool_descriptions": tool_descriptions})
         return {"allowed": self._allowed, "response": self._response}
 
 
-def _tool(name: str) -> MCPTool:
-    return MCPTool(name=name, description="", input_schema=None, output_schema=None)
+def _tool(name: str, description: str = "") -> MCPTool:
+    return MCPTool(name=name, description=description, input_schema=None, output_schema=None)
 
 
 def test_scope_check_passes_current_prompt_only():
@@ -52,17 +50,36 @@ def test_scope_check_prompt_input_independent_of_history_length():
     assert classifier.calls[0]["prompt"] == classifier.calls[1]["prompt"] == "list pods"
 
 
-def test_scope_check_passes_tool_names_from_state():
+def test_scope_check_passes_tool_descriptions_from_state():
     classifier = _FakeClassifier()
     node = ScopeCheckNode(classifier=classifier)
     state = AgentState(
         prompt="list pods",
-        tools=[_tool("k8s.list_pods"), _tool("k8s.describe_pod")],
+        tools=[
+            _tool("k8s.list_pods", "List all pods in a namespace"),
+            _tool("k8s.describe_pod", "Describe a specific pod"),
+        ],
     )
 
     node(state)
 
-    assert classifier.calls[0]["tool_names"] == ["k8s.list_pods", "k8s.describe_pod"]
+    assert classifier.calls[0]["tool_descriptions"] == [
+        "k8s.list_pods: List all pods in a namespace",
+        "k8s.describe_pod: Describe a specific pod",
+    ]
+
+
+def test_scope_check_tool_without_description_uses_name_only():
+    classifier = _FakeClassifier()
+    node = ScopeCheckNode(classifier=classifier)
+    state = AgentState(
+        prompt="list pods",
+        tools=[_tool("k8s.list_pods")],
+    )
+
+    node(state)
+
+    assert classifier.calls[0]["tool_descriptions"] == ["k8s.list_pods"]
 
 
 def test_scope_check_allowed_returns_completed_event():
