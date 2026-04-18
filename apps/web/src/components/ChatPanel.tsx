@@ -50,6 +50,22 @@ export function ChatPanel({
       </div>
       {summary}
       <div className="messages" ref={messagesContainerRef} onScroll={onMessagesScroll}>
+        {messages.length === 0 && !liveEvent ? (
+          <div className="chat-empty-state">
+            <div className="chat-empty-icon" aria-hidden="true">⚙</div>
+            <h3 className="chat-empty-title">Ops Copilot Agent</h3>
+            <p className="chat-empty-desc">
+              Your AI assistant for Kubernetes operations. Ask me about:
+            </p>
+            <ul className="chat-empty-capabilities">
+              <li>Pod status, restarts, and health checks</li>
+              <li>Container logs and error diagnosis</li>
+              <li>Deployment rollouts and scaling</li>
+              <li>Namespace events and alerts</li>
+              <li>Resource usage and performance</li>
+            </ul>
+          </div>
+        ) : null}
         {messages.map((message) => (
           <div key={message.id} className={`message-row ${message.role}`}>
             {message.role === "log" ? (

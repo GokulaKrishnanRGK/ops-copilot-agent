@@ -170,7 +170,7 @@ export function App() {
     if (stored === "dark" || stored === "light" || stored === "system") {
       return stored;
     }
-    return "system";
+    return "dark";
   });
 
   const [fetchMessagesPage, { error: messagesError }] = useLazyListMessagesQuery();
