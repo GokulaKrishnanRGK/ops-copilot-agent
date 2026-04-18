@@ -19,14 +19,19 @@ def _build_messages(request: LlmRequest) -> list[dict]:
     msgs = []
     for m in request.messages:
         msg: dict = {"role": m.role, "content": m.content}
-        if m.cache_control is not None:
+        if m.cache_control is not None and isinstance(m.content, str):
             msg["cache_control"] = m.cache_control
         msgs.append(msg)
     if request.response_format.type == "json_schema" and request.response_format.schema:
         schema_str = json.dumps(request.response_format.schema)
         for i in range(len(msgs) - 1, -1, -1):
             if msgs[i]["role"] == "user":
-                msgs[i] = {**msgs[i], "content": f"{msgs[i]['content']}\n\nReturn JSON only that matches this schema: {schema_str}"}
+                if isinstance(msgs[i]["content"], list):
+                    blocks = list(msgs[i]["content"])
+                    blocks.append({"type": "text", "text": f"Return JSON only that matches this schema: {schema_str}"})
+                    msgs[i] = {**msgs[i], "content": blocks}
+                else:
+                    msgs[i] = {**msgs[i], "content": f"{msgs[i]['content']}\n\nReturn JSON only that matches this schema: {schema_str}"}
                 break
     return msgs
 

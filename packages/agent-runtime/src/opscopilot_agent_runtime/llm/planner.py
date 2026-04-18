@@ -77,7 +77,10 @@ class LlmPlanner(LlmNodeBase):
                 LlmMessage(role="system", content=system_prompt, cache_control={"type": "ephemeral"}),
                 LlmMessage(
                     role="user",
-                    content=json.dumps({"prompt": wrap_user_input(prompt), "tools": tools}),
+                    content=[
+                        {"type": "text", "text": json.dumps({"tools": tools}), "cache_control": {"type": "ephemeral"}},
+                        {"type": "text", "text": json.dumps({"prompt": wrap_user_input(prompt)})},
+                    ],
                 ),
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_plan_schema()),

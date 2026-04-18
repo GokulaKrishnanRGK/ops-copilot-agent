@@ -80,6 +80,29 @@ def test_llm_planner_records_calls():
     assert recorder.budget_events == 1
 
 
+def test_llm_planner_user_message_has_cacheable_tool_block():
+    payload = {"steps": [{"tool_name": "k8s.list_pods"}]}
+    captured: list = []
+
+    def fake_completion(**kwargs):
+        captured.extend(kwargs.get("messages", []))
+        return _mock_litellm_response(payload)
+
+    with patch("litellm.completion", side_effect=fake_completion):
+        planner = _planner()
+        planner.plan("check pods", [{"name": "k8s.list_pods", "description": "List pods"}])
+
+    user_msg = next(m for m in captured if m["role"] == "user")
+    content = user_msg["content"]
+    assert isinstance(content, list), "user message content must be a list of blocks"
+    tools_block = content[0]
+    assert tools_block.get("cache_control") == {"type": "ephemeral"}
+    assert "tools" in tools_block["text"]
+    prompt_block = content[1]
+    assert "cache_control" not in prompt_block
+    assert "prompt" in prompt_block["text"]
+
+
 def test_node_span_name_includes_agent_node():
     assert _node_span_name("planner") == "llm.node.planner"
     assert _node_span_name("clarifier question") == "llm.node.clarifier_question"

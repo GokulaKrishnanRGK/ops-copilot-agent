@@ -10,7 +10,7 @@ OutputType = Literal["text", "json"]
 @dataclass(frozen=True)
 class LlmMessage:
     role: Role
-    content: str
+    content: str | list
     cache_control: dict | None = None
 
 
