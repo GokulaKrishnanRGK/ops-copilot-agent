@@ -11,6 +11,7 @@ OutputType = Literal["text", "json"]
 class LlmMessage:
     role: Role
     content: str
+    cache_control: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,8 @@ class LlmResponse:
     latency_ms: int
     provider_metadata: dict[str, Any]
     error: LlmError | None
+    cache_hit: bool = False
+    cache_read_input_tokens: int = 0
 
 
 @dataclass(frozen=True)

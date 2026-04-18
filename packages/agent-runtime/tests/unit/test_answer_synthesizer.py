@@ -35,6 +35,7 @@ def _mock_litellm_response(content: str):
     resp.usage = MagicMock()
     resp.usage.prompt_tokens = 10
     resp.usage.completion_tokens = 5
+    resp.usage.cache_read_input_tokens = 0
     resp._hidden_params = {"response_cost": 0.001}
     resp.model = "model"
     return resp

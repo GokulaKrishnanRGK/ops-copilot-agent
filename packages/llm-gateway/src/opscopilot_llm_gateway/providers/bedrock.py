@@ -16,7 +16,12 @@ def _prefixed(model_id: str) -> str:
 
 
 def _build_messages(request: LlmRequest) -> list[dict]:
-    msgs = [{"role": m.role, "content": m.content} for m in request.messages]
+    msgs = []
+    for m in request.messages:
+        msg: dict = {"role": m.role, "content": m.content}
+        if m.cache_control is not None:
+            msg["cache_control"] = m.cache_control
+        msgs.append(msg)
     if request.response_format.type == "json_schema" and request.response_format.schema:
         schema_str = json.dumps(request.response_format.schema)
         for i in range(len(msgs) - 1, -1, -1):
@@ -70,6 +75,7 @@ class BedrockProvider:
         usage = response.usage or {}
         tokens_input = getattr(usage, "prompt_tokens", 0) or 0
         tokens_output = getattr(usage, "completion_tokens", 0) or 0
+        cache_read_input_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
         return LlmResponse(
             output=_make_output(text, request.response_format.type == "json_schema"),
             tokens_input=tokens_input,
@@ -78,6 +84,8 @@ class BedrockProvider:
             latency_ms=latency_ms,
             provider_metadata={"provider": "bedrock", "model": request.model_id},
             error=None,
+            cache_hit=cache_read_input_tokens > 0,
+            cache_read_input_tokens=cache_read_input_tokens,
         )
 
     def invoke_stream(self, request: LlmRequest, on_delta: Callable[[str], None]) -> LlmResponse:
@@ -93,6 +101,7 @@ class BedrockProvider:
         chunks: list[str] = []
         tokens_input = 0
         tokens_output = 0
+        cache_read_input_tokens = 0
         first_token_latency_ms: int | None = None
         for chunk in stream:
             delta = chunk.choices[0].delta.content if chunk.choices else None
@@ -105,6 +114,7 @@ class BedrockProvider:
             if usage:
                 tokens_input = getattr(usage, "prompt_tokens", 0) or 0
                 tokens_output = getattr(usage, "completion_tokens", 0) or 0
+                cache_read_input_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
 
         latency_ms = int((time.monotonic() - start) * 1000)
         text = "".join(chunks)
@@ -128,4 +138,6 @@ class BedrockProvider:
                 "time_to_first_token_ms": first_token_latency_ms,
             },
             error=None,
+            cache_hit=cache_read_input_tokens > 0,
+            cache_read_input_tokens=cache_read_input_tokens,
         )
