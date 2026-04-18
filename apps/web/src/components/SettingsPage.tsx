@@ -20,6 +20,26 @@ type SettingsSectionProps = {
 
 type NodeErrors = Partial<Record<keyof SettingsNodes, { model_id?: string; prompt_version?: string }>>;
 
+type LimitsErrors = {
+  max_agent_steps?: string;
+  max_budget_usd?: string;
+};
+
+type HistoryErrors = {
+  history_window_turns?: string;
+};
+
+type EvalErrors = {
+  eval_sample_rate?: string;
+  eval_judge_model_id?: string;
+};
+
+type HardLimitErrors = {
+  agent_max_tool_calls?: string;
+  agent_max_llm_calls?: string;
+  agent_max_execution_time_ms?: string;
+};
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 const NODE_LABELS: Record<keyof SettingsNodes, string> = {
@@ -45,7 +65,51 @@ function validateNodes(nodes: SettingsNodes): NodeErrors {
   return errors;
 }
 
-// ── shared section shell ───────────────────────────────────────────────────
+function validateLimits(steps: string, budget: string): LimitsErrors {
+  const errors: LimitsErrors = {};
+  const stepsNum = Number(steps);
+  if (!steps.trim() || !Number.isInteger(stepsNum) || stepsNum < 1) {
+    errors.max_agent_steps = "Must be a whole number ≥ 1";
+  }
+  if (budget.trim() !== "" && (isNaN(Number(budget)) || Number(budget) < 0)) {
+    errors.max_budget_usd = "Must be a number ≥ 0, or leave blank for unlimited";
+  }
+  return errors;
+}
+
+function validateHistory(window: string): HistoryErrors {
+  const errors: HistoryErrors = {};
+  const n = Number(window);
+  if (!window.trim() || !Number.isInteger(n) || n < 1) {
+    errors.history_window_turns = "Must be a whole number ≥ 1";
+  }
+  return errors;
+}
+
+function validateEval(sampleRate: string, judgeModelId: string): EvalErrors {
+  const errors: EvalErrors = {};
+  const rate = Number(sampleRate);
+  if (sampleRate.trim() === "" || isNaN(rate) || rate < 0 || rate > 1) {
+    errors.eval_sample_rate = "Must be a number between 0 and 1";
+  }
+  if (!judgeModelId.trim()) {
+    errors.eval_judge_model_id = "Required";
+  }
+  return errors;
+}
+
+function validateHardLimits(toolCalls: string, llmCalls: string, execTime: string): HardLimitErrors {
+  const errors: HardLimitErrors = {};
+  const tc = Number(toolCalls);
+  const lc = Number(llmCalls);
+  const et = Number(execTime);
+  if (!toolCalls.trim() || !Number.isInteger(tc) || tc < 1) errors.agent_max_tool_calls = "Must be a whole number ≥ 1";
+  if (!llmCalls.trim() || !Number.isInteger(lc) || lc < 1) errors.agent_max_llm_calls = "Must be a whole number ≥ 1";
+  if (!execTime.trim() || !Number.isInteger(et) || et < 1) errors.agent_max_execution_time_ms = "Must be a whole number ≥ 1";
+  return errors;
+}
+
+// ── shared components ──────────────────────────────────────────────────────
 
 function SettingsSection({ title, description, children }: SettingsSectionProps) {
   return (
@@ -58,6 +122,27 @@ function SettingsSection({ title, description, children }: SettingsSectionProps)
         {children ?? <p className="settings-coming-soon">Coming in a future slice.</p>}
       </div>
     </section>
+  );
+}
+
+type ToggleProps = {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+};
+
+function Toggle({ checked, onChange, label }: ToggleProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={`settings-toggle${checked ? " settings-toggle--on" : ""}`}
+      onClick={() => onChange(!checked)}
+      aria-label={label}
+    >
+      <span className="settings-toggle-thumb" />
+    </button>
   );
 }
 
@@ -116,23 +201,6 @@ function ModelConfigSection({ nodes, errors, onChange }: ModelConfigSectionProps
 
 // ── execution limits section ───────────────────────────────────────────────
 
-type LimitsErrors = {
-  max_agent_steps?: string;
-  max_budget_usd?: string;
-};
-
-function validateLimits(steps: string, budget: string): LimitsErrors {
-  const errors: LimitsErrors = {};
-  const stepsNum = Number(steps);
-  if (!steps.trim() || !Number.isInteger(stepsNum) || stepsNum < 1) {
-    errors.max_agent_steps = "Must be a whole number ≥ 1";
-  }
-  if (budget.trim() !== "" && (isNaN(Number(budget)) || Number(budget) < 0)) {
-    errors.max_budget_usd = "Must be a number ≥ 0, or leave blank for unlimited";
-  }
-  return errors;
-}
-
 type ExecutionLimitsSectionProps = {
   steps: string;
   budget: string;
@@ -180,6 +248,225 @@ function ExecutionLimitsSection({ steps, budget, errors, onStepsChange, onBudget
   );
 }
 
+// ── history & summarization section ───────────────────────────────────────
+
+type HistorySectionProps = {
+  historyWindow: string;
+  summarizerVersion: string;
+  errors: HistoryErrors;
+  onWindowChange: (v: string) => void;
+  onVersionChange: (v: string) => void;
+};
+
+function HistorySummarizationSection({ historyWindow, summarizerVersion, errors, onWindowChange, onVersionChange }: HistorySectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">History Window</span>
+          <span className="limits-field-unit">turns kept verbatim</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.history_window_turns ? " settings-input-error" : ""}`}
+            value={historyWindow}
+            onChange={(e: { target: { value: string } }) => onWindowChange(e.target.value)}
+            inputMode="numeric"
+            placeholder="6"
+          />
+          {errors.history_window_turns && <span className="settings-field-error">{errors.history_window_turns}</span>}
+        </div>
+      </div>
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Summarizer Version</span>
+          <span className="limits-field-unit">prompt version</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className="settings-input limits-input"
+            value={summarizerVersion}
+            onChange={(e: { target: { value: string } }) => onVersionChange(e.target.value)}
+            placeholder="latest"
+            spellCheck={false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── evaluation & sampling section ─────────────────────────────────────────
+
+type EvalSectionProps = {
+  sampleRate: string;
+  llmJudgeEnabled: boolean;
+  ragasEnabled: boolean;
+  judgeModelId: string;
+  errors: EvalErrors;
+  onSampleRateChange: (v: string) => void;
+  onLlmJudgeChange: (v: boolean) => void;
+  onRagasChange: (v: boolean) => void;
+  onJudgeModelChange: (v: string) => void;
+};
+
+function EvalSamplingSection({
+  sampleRate, llmJudgeEnabled, ragasEnabled, judgeModelId, errors,
+  onSampleRateChange, onLlmJudgeChange, onRagasChange, onJudgeModelChange,
+}: EvalSectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Sample Rate</span>
+          <span className="limits-field-unit">0.0 – 1.0 (0 = off)</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.eval_sample_rate ? " settings-input-error" : ""}`}
+            value={sampleRate}
+            onChange={(e: { target: { value: string } }) => onSampleRateChange(e.target.value)}
+            inputMode="decimal"
+            placeholder="0.1"
+          />
+          {errors.eval_sample_rate && <span className="settings-field-error">{errors.eval_sample_rate}</span>}
+        </div>
+      </div>
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">LLM-as-Judge</span>
+          <span className="limits-field-unit">evaluate answer quality</span>
+        </div>
+        <div className="settings-toggle-row">
+          <Toggle checked={llmJudgeEnabled} onChange={onLlmJudgeChange} label="Enable LLM-as-judge scoring" />
+        </div>
+      </div>
+      {llmJudgeEnabled && (
+        <div className="limits-row settings-conditional">
+          <div className="limits-row-label">
+            <span className="limits-field-name">Judge Model ID</span>
+            <span className="limits-field-unit">model used for scoring</span>
+          </div>
+          <div className="settings-field">
+            <input
+              className={`settings-input${errors.eval_judge_model_id ? " settings-input-error" : ""}`}
+              value={judgeModelId}
+              onChange={(e: { target: { value: string } }) => onJudgeModelChange(e.target.value)}
+              placeholder="anthropic.claude-3-haiku-20240307-v1:0"
+              spellCheck={false}
+            />
+            {errors.eval_judge_model_id && <span className="settings-field-error">{errors.eval_judge_model_id}</span>}
+          </div>
+        </div>
+      )}
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">RAGAS Scoring</span>
+          <span className="limits-field-unit">evaluate RAG retrieval</span>
+        </div>
+        <div className="settings-toggle-row">
+          <Toggle checked={ragasEnabled} onChange={onRagasChange} label="Enable RAGAS scoring" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── safety & injection section ─────────────────────────────────────────────
+
+type SafetySectionProps = {
+  llmCheckEnabled: boolean;
+  onChange: (v: boolean) => void;
+};
+
+function SafetyInjectionSection({ llmCheckEnabled, onChange }: SafetySectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">LLM Injection Check</span>
+          <span className="limits-field-unit">classifier layer 3</span>
+        </div>
+        <div className="settings-toggle-row">
+          <Toggle checked={llmCheckEnabled} onChange={onChange} label="Enable LLM-based prompt injection classifier" />
+        </div>
+      </div>
+      {llmCheckEnabled && (
+        <p className="limits-field-unit settings-conditional">
+          Injection classifier model ID is configured in <strong>Model Configuration</strong> above.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── agent hard limits section ──────────────────────────────────────────────
+
+type HardLimitsSectionProps = {
+  toolCalls: string;
+  llmCalls: string;
+  execTime: string;
+  errors: HardLimitErrors;
+  onToolCallsChange: (v: string) => void;
+  onLlmCallsChange: (v: string) => void;
+  onExecTimeChange: (v: string) => void;
+};
+
+function AgentHardLimitsSection({ toolCalls, llmCalls, execTime, errors, onToolCallsChange, onLlmCallsChange, onExecTimeChange }: HardLimitsSectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Max Tool Calls</span>
+          <span className="limits-field-unit">calls per run</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.agent_max_tool_calls ? " settings-input-error" : ""}`}
+            value={toolCalls}
+            onChange={(e: { target: { value: string } }) => onToolCallsChange(e.target.value)}
+            inputMode="numeric"
+            placeholder="10"
+          />
+          {errors.agent_max_tool_calls && <span className="settings-field-error">{errors.agent_max_tool_calls}</span>}
+        </div>
+      </div>
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Max LLM Calls</span>
+          <span className="limits-field-unit">calls per run</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.agent_max_llm_calls ? " settings-input-error" : ""}`}
+            value={llmCalls}
+            onChange={(e: { target: { value: string } }) => onLlmCallsChange(e.target.value)}
+            inputMode="numeric"
+            placeholder="10"
+          />
+          {errors.agent_max_llm_calls && <span className="settings-field-error">{errors.agent_max_llm_calls}</span>}
+        </div>
+      </div>
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Max Execution Time</span>
+          <span className="limits-field-unit">ms per run</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input limits-input${errors.agent_max_execution_time_ms ? " settings-input-error" : ""}`}
+            value={execTime}
+            onChange={(e: { target: { value: string } }) => onExecTimeChange(e.target.value)}
+            inputMode="numeric"
+            placeholder="30000"
+          />
+          {errors.agent_max_execution_time_ms && <span className="settings-field-error">{errors.agent_max_execution_time_ms}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── page ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_NODE: NodeConfig = { model_id: "", prompt_version: "latest" };
@@ -202,19 +489,34 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [budgetRaw, setBudgetRaw] = useState("");
   const [limitsErrors, setLimitsErrors] = useState<LimitsErrors>({});
 
+  const [historyWindowRaw, setHistoryWindowRaw] = useState("");
+  const [historyErrors, setHistoryErrors] = useState<HistoryErrors>({});
+
+  const [evalSampleRateRaw, setEvalSampleRateRaw] = useState("");
+  const [evalErrors, setEvalErrors] = useState<EvalErrors>({});
+
+  const [toolCallsRaw, setToolCallsRaw] = useState("");
+  const [llmCallsRaw, setLlmCallsRaw] = useState("");
+  const [execTimeRaw, setExecTimeRaw] = useState("");
+  const [hardLimitErrors, setHardLimitErrors] = useState<HardLimitErrors>({});
+
   useEffect(() => {
     if (data && !draft) {
       const { id: _id, schema_version: _sv, ...editable } = data;
       setDraft(editable);
       setStepsRaw(String(editable.max_agent_steps));
       setBudgetRaw(editable.max_budget_usd != null ? String(editable.max_budget_usd) : "");
+      setHistoryWindowRaw(String(editable.history_window_turns));
+      setEvalSampleRateRaw(String(editable.eval_sample_rate));
+      setToolCallsRaw(String(editable.agent_max_tool_calls));
+      setLlmCallsRaw(String(editable.agent_max_llm_calls));
+      setExecTimeRaw(String(editable.agent_max_execution_time_ms));
     }
   }, [data, draft]);
 
   function handleNodesChange(nodes: SettingsNodes) {
     if (!draft) return;
-    const errors = validateNodes(nodes);
-    setNodeErrors(errors);
+    setNodeErrors(validateNodes(nodes));
     setDraft({ ...draft, nodes });
   }
 
@@ -222,18 +524,76 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setStepsRaw(v);
     const errors = validateLimits(v, budgetRaw);
     setLimitsErrors(errors);
-    if (!errors.max_agent_steps && draft) {
-      setDraft({ ...draft, max_agent_steps: Number(v) });
-    }
+    if (!errors.max_agent_steps && draft) setDraft({ ...draft, max_agent_steps: Number(v) });
   }
 
   function handleBudgetChange(v: string) {
     setBudgetRaw(v);
     const errors = validateLimits(stepsRaw, v);
     setLimitsErrors(errors);
-    if (!errors.max_budget_usd && draft) {
-      setDraft({ ...draft, max_budget_usd: v.trim() === "" ? null : Number(v) });
-    }
+    if (!errors.max_budget_usd && draft) setDraft({ ...draft, max_budget_usd: v.trim() === "" ? null : Number(v) });
+  }
+
+  function handleHistoryWindowChange(v: string) {
+    setHistoryWindowRaw(v);
+    const errors = validateHistory(v);
+    setHistoryErrors(errors);
+    if (!errors.history_window_turns && draft) setDraft({ ...draft, history_window_turns: Number(v) });
+  }
+
+  function handleSummarizerVersionChange(v: string) {
+    if (!draft) return;
+    setDraft({ ...draft, summarizer_prompt_version: v });
+  }
+
+  function handleEvalSampleRateChange(v: string) {
+    setEvalSampleRateRaw(v);
+    const errors = validateEval(v, draft?.eval_judge_model_id ?? "");
+    setEvalErrors(errors);
+    if (!errors.eval_sample_rate && draft) setDraft({ ...draft, eval_sample_rate: Number(v) });
+  }
+
+  function handleLlmJudgeChange(v: boolean) {
+    if (!draft) return;
+    setDraft({ ...draft, eval_llm_judge_enabled: v });
+  }
+
+  function handleRagasChange(v: boolean) {
+    if (!draft) return;
+    setDraft({ ...draft, eval_ragas_enabled: v });
+  }
+
+  function handleJudgeModelChange(v: string) {
+    if (!draft) return;
+    const errors = validateEval(evalSampleRateRaw, v);
+    setEvalErrors(errors);
+    setDraft({ ...draft, eval_judge_model_id: v });
+  }
+
+  function handleInjectionCheckChange(v: boolean) {
+    if (!draft) return;
+    setDraft({ ...draft, prompt_injection_llm_check: v });
+  }
+
+  function handleToolCallsChange(v: string) {
+    setToolCallsRaw(v);
+    const errors = validateHardLimits(v, llmCallsRaw, execTimeRaw);
+    setHardLimitErrors(errors);
+    if (!errors.agent_max_tool_calls && draft) setDraft({ ...draft, agent_max_tool_calls: Number(v) });
+  }
+
+  function handleLlmCallsChange(v: string) {
+    setLlmCallsRaw(v);
+    const errors = validateHardLimits(toolCallsRaw, v, execTimeRaw);
+    setHardLimitErrors(errors);
+    if (!errors.agent_max_llm_calls && draft) setDraft({ ...draft, agent_max_llm_calls: Number(v) });
+  }
+
+  function handleExecTimeChange(v: string) {
+    setExecTimeRaw(v);
+    const errors = validateHardLimits(toolCallsRaw, llmCallsRaw, v);
+    setHardLimitErrors(errors);
+    if (!errors.agent_max_execution_time_ms && draft) setDraft({ ...draft, agent_max_execution_time_ms: Number(v) });
   }
 
   return (
@@ -288,19 +648,54 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             <SettingsSection
               title="History & Summarization"
               description="Configure how many conversation turns to keep verbatim before compacting."
-            />
+            >
+              <HistorySummarizationSection
+                historyWindow={historyWindowRaw}
+                summarizerVersion={draft?.summarizer_prompt_version ?? "latest"}
+                errors={historyErrors}
+                onWindowChange={handleHistoryWindowChange}
+                onVersionChange={handleSummarizerVersionChange}
+              />
+            </SettingsSection>
             <SettingsSection
               title="Evaluation & Sampling"
               description="Tune online eval sampling rate, LLM-as-judge, and RAGAS scoring."
-            />
+            >
+              <EvalSamplingSection
+                sampleRate={evalSampleRateRaw}
+                llmJudgeEnabled={draft?.eval_llm_judge_enabled ?? true}
+                ragasEnabled={draft?.eval_ragas_enabled ?? true}
+                judgeModelId={draft?.eval_judge_model_id ?? ""}
+                errors={evalErrors}
+                onSampleRateChange={handleEvalSampleRateChange}
+                onLlmJudgeChange={handleLlmJudgeChange}
+                onRagasChange={handleRagasChange}
+                onJudgeModelChange={handleJudgeModelChange}
+              />
+            </SettingsSection>
             <SettingsSection
               title="Safety & Injection"
               description="Enable or disable the LLM-based prompt injection classifier."
-            />
+            >
+              <SafetyInjectionSection
+                llmCheckEnabled={draft?.prompt_injection_llm_check ?? false}
+                onChange={handleInjectionCheckChange}
+              />
+            </SettingsSection>
             <SettingsSection
               title="Agent Hard Limits"
               description="Cap tool calls, LLM calls, and total execution time per run."
-            />
+            >
+              <AgentHardLimitsSection
+                toolCalls={toolCallsRaw}
+                llmCalls={llmCallsRaw}
+                execTime={execTimeRaw}
+                errors={hardLimitErrors}
+                onToolCallsChange={handleToolCallsChange}
+                onLlmCallsChange={handleLlmCallsChange}
+                onExecTimeChange={handleExecTimeChange}
+              />
+            </SettingsSection>
           </div>
         </div>
       )}
