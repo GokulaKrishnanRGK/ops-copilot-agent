@@ -19,6 +19,7 @@ def _missing_env() -> list[str]:
     return missing
 
 
+@pytest.mark.skip(reason="writes to the real database; run manually with RUN_MCP_INTEGRATION=1 against a disposable DB")
 @pytest.mark.integration
 def test_chat_stream_real_prompt_hello_status(client: TestClient) -> None:
     missing = _missing_env()
