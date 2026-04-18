@@ -46,6 +46,14 @@ class RunMetricsResponse(BaseModel):
     model_usage: list[ModelUsageResponse]
 
 
+class RuntimeConfigResponse(BaseModel):
+    id: str
+    schema_version: str
+    node_models: dict[str, str]
+    max_agent_steps: int
+    max_budget_usd: float | None
+
+
 class AgentRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -54,7 +62,7 @@ class AgentRunResponse(BaseModel):
     started_at: datetime
     ended_at: datetime | None
     status: str
-    config_json: dict
+    runtime_config: RuntimeConfigResponse | None
     metrics: RunMetricsResponse
 
 

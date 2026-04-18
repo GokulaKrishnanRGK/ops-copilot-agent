@@ -9,11 +9,17 @@ from opscopilot_api.schemas.runs import (
     ModelUsageResponse,
     NodeUsageResponse,
     RunMetricsResponse,
+    RuntimeConfigResponse,
     SessionMetricsResponse,
     UsageMetricsResponse,
 )
-from opscopilot_api.services.run_service import RunService
-from opscopilot_db.repositories import AgentRunRepo, BudgetEventRepo, LlmCallRepo, MessageRepo, SessionRepo
+from opscopilot_api.services.run_service import (
+    RunService,
+    _runtime_config_budget,
+    _runtime_config_max_steps,
+    _runtime_config_node_models,
+)
+from opscopilot_db.repositories import AgentRunRepo, BudgetEventRepo, LlmCallRepo, MessageRepo, RuntimeConfigRepo, SessionRepo
 
 router = APIRouter()
 
@@ -25,6 +31,7 @@ def get_run_service(db: Session = Depends(get_db)) -> RunService:
         llm_call_repo=LlmCallRepo(db=db),
         budget_event_repo=BudgetEventRepo(db=db),
         message_repo=MessageRepo(db=db),
+        runtime_config_repo=RuntimeConfigRepo(db=db),
     )
 
 
@@ -41,6 +48,16 @@ def list_runs(
     run_items: list[AgentRunResponse] = []
     for item in items:
         run_metrics = service.metrics_for_run(item.id)
+        rc = service.runtime_config_for_run(item)
+        runtime_config_response: RuntimeConfigResponse | None = None
+        if rc is not None:
+            runtime_config_response = RuntimeConfigResponse(
+                id=rc.id,
+                schema_version=rc.schema_version,
+                node_models=_runtime_config_node_models(rc),
+                max_agent_steps=_runtime_config_max_steps(rc),
+                max_budget_usd=_runtime_config_budget(rc),
+            )
         run_items.append(
             AgentRunResponse(
                 id=item.id,
@@ -48,7 +65,7 @@ def list_runs(
                 started_at=item.started_at,
                 ended_at=item.ended_at,
                 status=item.status,
-                config_json=item.config_json,
+                runtime_config=runtime_config_response,
                 metrics=RunMetricsResponse(
                     usage=UsageMetricsResponse(
                         tokens_input=run_metrics.usage.tokens_input,

@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 
 from opscopilot_api.routers.sessions_router import get_chat_service
 from opscopilot_api.services.chat_service import ChatService
-from opscopilot_api.services.runtime_factory import RuntimeFactory
 from opscopilot_agent_runtime.state import AgentState
 from opscopilot_agent_runtime.runtime.events import AgentEvent
 from opscopilot_db import models
@@ -29,7 +28,7 @@ class _FakeRuntime:
         yield AgentState(answer="integration-answer")
 
 
-class _FakeRuntimeFactory(RuntimeFactory):
+class _FakeRuntimeFactory:
     def create(self, recorder):  # noqa: ARG002
         return _FakeRuntime()
 

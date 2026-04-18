@@ -3,6 +3,7 @@ from .contracts import (
     BudgetEventRepository,
     LlmCallRepository,
     MessageRepository,
+    RuntimeConfigRepository,
     SessionRepository,
     ToolCallRepository,
 )
@@ -10,6 +11,7 @@ from .sqlalchemy.agent_run_repo import AgentRunRepo
 from .sqlalchemy.budget_event_repo import BudgetEventRepo
 from .sqlalchemy.llm_call_repo import LlmCallRepo
 from .sqlalchemy.message_repo import MessageRepo
+from .sqlalchemy.runtime_config_repo import RuntimeConfigRepo
 from .sqlalchemy.session_repo import SessionRepo
 from .sqlalchemy.tool_call_repo import ToolCallRepo
 
@@ -20,10 +22,12 @@ __all__ = [
     "LlmCallRepository",
     "ToolCallRepository",
     "BudgetEventRepository",
+    "RuntimeConfigRepository",
     "SessionRepo",
     "MessageRepo",
     "AgentRunRepo",
     "LlmCallRepo",
     "BudgetEventRepo",
     "ToolCallRepo",
+    "RuntimeConfigRepo",
 ]

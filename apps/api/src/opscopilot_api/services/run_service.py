@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from opscopilot_db import models, repositories
 
@@ -73,6 +74,27 @@ def _budget_max_usd(config_json: dict) -> float | None:
     return None
 
 
+def _runtime_config_budget(config: models.RuntimeConfig) -> float | None:
+    raw: dict[str, Any] = config.config_json if isinstance(config.config_json, dict) else {}
+    limits: dict[str, Any] = raw.get("limits", {})
+    value = limits.get("max_budget_usd")
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    return None
+
+
+def _runtime_config_node_models(config: models.RuntimeConfig) -> dict[str, str]:
+    raw: dict[str, Any] = config.config_json if isinstance(config.config_json, dict) else {}
+    nodes: dict[str, Any] = raw.get("nodes", {})
+    return {name: str(cfg.get("model_id", "")) for name, cfg in nodes.items() if isinstance(cfg, dict)}
+
+
+def _runtime_config_max_steps(config: models.RuntimeConfig) -> int:
+    raw: dict[str, Any] = config.config_json if isinstance(config.config_json, dict) else {}
+    limits: dict[str, Any] = raw.get("limits", {})
+    return int(limits.get("max_agent_steps", 10))
+
+
 def _budget_metrics(total_usd: float, delta_usd: float, event_count: int, max_usd: float | None) -> BudgetMetrics:
     if max_usd is None:
         return BudgetMetrics(
@@ -120,12 +142,14 @@ class RunService:
         llm_call_repo: repositories.LlmCallRepository,
         budget_event_repo: repositories.BudgetEventRepository,
         message_repo: repositories.MessageRepository | None = None,
+        runtime_config_repo: repositories.RuntimeConfigRepository | None = None,
     ) -> None:
         self._session_repo = session_repo
         self._run_repo = run_repo
         self._llm_call_repo = llm_call_repo
         self._budget_event_repo = budget_event_repo
         self._message_repo = message_repo
+        self._runtime_config_repo = runtime_config_repo
 
     def list_by_session(self, session_id: str) -> list[models.AgentRun]:
         session = self._session_repo.get(session_id)
@@ -133,15 +157,29 @@ class RunService:
             raise ValueError("session not found")
         return list(self._run_repo.list_by_session(session_id))
 
+    def runtime_config_for_run(self, run: models.AgentRun) -> models.RuntimeConfig | None:
+        if self._runtime_config_repo is None:
+            return None
+        if run.runtime_config_id is None:
+            return None
+        return self._runtime_config_repo.get(run.runtime_config_id)
+
     def metrics_for_run(self, run_id: str) -> RunMetrics:
         run = self._run_repo.get(run_id)
         config_json = run.config_json if run is not None else {}
         llm_calls = list(self._llm_call_repo.list_by_run(run_id))
         budget_events = list(self._budget_event_repo.list_by_run(run_id))
+        budget_max_usd: float | None = None
+        if run is not None:
+            rc = self.runtime_config_for_run(run)
+            if rc is not None:
+                budget_max_usd = _runtime_config_budget(rc)
+            else:
+                budget_max_usd = _budget_max_usd(config_json)
         return self._build_run_metrics(
             llm_calls=llm_calls,
             budget_events=budget_events,
-            budget_max_usd=_budget_max_usd(config_json),
+            budget_max_usd=budget_max_usd,
         )
 
     def metrics_for_session(self, session_id: str) -> SessionMetrics:
@@ -158,7 +196,11 @@ class RunService:
         for run in runs:
             llm_calls = list(self._llm_call_repo.list_by_run(run.id))
             budget_events = list(self._budget_event_repo.list_by_run(run.id))
-            run_budget_max_usd = _budget_max_usd(run.config_json)
+            rc = self.runtime_config_for_run(run)
+            if rc is not None:
+                run_budget_max_usd = _runtime_config_budget(rc)
+            else:
+                run_budget_max_usd = _budget_max_usd(run.config_json)
             if run_budget_max_usd is not None:
                 latest_budget_max_usd = run_budget_max_usd
 

@@ -133,7 +133,7 @@ class AnswerSynthesizer(LlmNodeBase):
                 ],
                 response_format=LlmResponseFormat(type="text", schema=None),
                 temperature=0.0,
-                max_tokens=256,
+                max_tokens=1024,
                 idempotency_key=str(uuid.uuid4()),
                 tags=LlmTags(session_id="answer", agent_run_id="answer", agent_node="answer"),
                 prompt_ref=prompt_ref_for(
@@ -163,7 +163,7 @@ class AnswerSynthesizer(LlmNodeBase):
             ],
             response_format=LlmResponseFormat(type="json_schema", schema=_response_schema()),
             temperature=0.0,
-            max_tokens=256,
+            max_tokens=1024,
             idempotency_key=str(uuid.uuid4()),
             tags=LlmTags(session_id="answer", agent_run_id="answer", agent_node="answer"),
             prompt_ref=prompt_ref_for(self._prompt_source, "answer", self._prompt_version),

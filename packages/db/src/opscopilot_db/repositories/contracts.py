@@ -60,4 +60,6 @@ class BudgetEventRepository(Protocol):
 
 
 class RuntimeConfigRepository(Protocol):
+    def get(self, config_id: str) -> models.RuntimeConfig | None: ...
+
     def get_active(self) -> models.RuntimeConfig | None: ...

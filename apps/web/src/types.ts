@@ -65,13 +65,21 @@ export type RunMetrics = {
   model_usage: ModelUsage[];
 };
 
+export type RuntimeConfig = {
+  id: string;
+  schema_version: string;
+  node_models: Record<string, string>;
+  max_agent_steps: number;
+  max_budget_usd: number | null;
+};
+
 export type Run = {
   id: string;
   session_id: string;
   started_at: string;
   ended_at: string | null;
   status: string;
-  config_json: Record<string, unknown>;
+  runtime_config: RuntimeConfig | null;
   metrics: RunMetrics;
 };
 

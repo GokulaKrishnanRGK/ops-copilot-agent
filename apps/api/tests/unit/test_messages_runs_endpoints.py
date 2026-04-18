@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 
 from opscopilot_api.routers.sessions_router import get_chat_service
 from opscopilot_api.services.chat_service import ChatService
-from opscopilot_api.services.runtime_factory import RuntimeFactory
 from opscopilot_db import models
 from opscopilot_db.repositories import MessageRepo, SessionRepo
 
@@ -25,7 +24,7 @@ class _FakeRuntime:
         return _FakeResult(answer="ok", error=None)
 
 
-class _FakeRuntimeFactory(RuntimeFactory):
+class _FakeRuntimeFactory:
     def create(self, recorder):  # noqa: ARG002
         return _FakeRuntime()
 
