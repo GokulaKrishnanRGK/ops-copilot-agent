@@ -16,6 +16,7 @@ from opscopilot_api.services.event_mapper import agent_run_completed, agent_run_
 from opscopilot_api.services.runtime_factory import RuntimeFactory
 from opscopilot_api.services.session_service import SessionService
 from opscopilot_api.services.sse import encode_sse
+from opscopilot_api.services.title_service import TitleService
 
 router = APIRouter()
 
@@ -26,10 +27,16 @@ def get_session_service(db: Session = Depends(get_db)) -> SessionService:
 
 def get_chat_service(request: Request, db: Session = Depends(get_db)) -> ChatService:
     config = request.app.state.config_cache.get()
+    factory = RuntimeFactory(config=config)
+    title_service = TitleService(
+        title_generator=factory.build_title_generator(),
+        session_repo=SessionRepo(db=db),
+    )
     return ChatService(
         session_repo=SessionRepo(db=db),
         message_repo=MessageRepo(db=db),
-        runtime_factory=RuntimeFactory(config=config),
+        runtime_factory=factory,
+        title_service=title_service,
     )
 
 

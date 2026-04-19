@@ -14,6 +14,7 @@ from .nodes.scope_check_node import ScopeCheckNode
 from .nodes.injection_guard_node import InjectionClassifier, PromptInjectionGuard, StubInjectionClassifier
 from .llm.injection_classifier import LlmInjectionClassifier
 from .llm.summarizer import SummarizerLlmNode
+from .llm.title_generator import LlmTitleGenerator, NoOpTitleGenerator, TitleGenerator
 from .history import HistoryManager, InMemorySummaryStore, SummaryStore
 from .state import AgentState
 from .persistence import AgentRunRecorder
@@ -51,6 +52,9 @@ __all__ = [
     "StubInjectionClassifier",
     "LlmInjectionClassifier",
     "SummarizerLlmNode",
+    "TitleGenerator",
+    "LlmTitleGenerator",
+    "NoOpTitleGenerator",
     "HistoryManager",
     "SummaryStore",
     "InMemorySummaryStore",

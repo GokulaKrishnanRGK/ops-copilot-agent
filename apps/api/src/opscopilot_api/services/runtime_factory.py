@@ -12,11 +12,14 @@ from opscopilot_agent_runtime import (
     LlmClarifier,
     LlmInjectionClassifier,
     LlmPlanner,
+    LlmTitleGenerator,
     MCPClient,
+    NoOpTitleGenerator,
     PlannerNode,
     PromptInjectionGuard,
     ScopeCheckNode,
     ScopeClassifier,
+    TitleGenerator,
     ToolExecutorNode,
     ToolRegistry,
     prompt_source_from_env,
@@ -106,6 +109,20 @@ def _build_answer_scorer(config: RuntimeConfigData, provider: BedrockProvider, b
 class RuntimeFactory:
     def __init__(self, config: RuntimeConfigData) -> None:
         self._config = config
+
+    def build_title_generator(self) -> TitleGenerator:
+        try:
+            provider = BedrockProvider()
+            budget = BudgetEnforcer(BudgetState(max_usd=0.01, total_usd=0.0))
+            ledger = CostLedger()
+            return LlmTitleGenerator(
+                provider=provider,
+                model_id=self._config.title_gen_model_id,
+                budget=budget,
+                ledger=ledger,
+            )
+        except Exception:
+            return NoOpTitleGenerator()
 
     def create(self, recorder: AgentRunRecorder) -> AgentRuntime:
         config = self._config

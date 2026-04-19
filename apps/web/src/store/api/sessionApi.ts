@@ -4,6 +4,9 @@ import { baseApi } from "../baseApi";
 
 export const sessionApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    getSession: builder.query<Session, string>({
+      query: (sessionId) => `/sessions/${sessionId}`,
+    }),
     listSessions: builder.query<Session[], { limit: number; offset: number }>({
       query: ({ limit, offset }) => ({
         url: "/sessions",
@@ -44,6 +47,7 @@ export const sessionApi = baseApi.injectEndpoints({
 
 export const {
   useLazyListSessionsQuery,
+  useLazyGetSessionQuery,
   useCreateSessionMutation,
   useRenameSessionMutation,
   useDeleteSessionMutation,

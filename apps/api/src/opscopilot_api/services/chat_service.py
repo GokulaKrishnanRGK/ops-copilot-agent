@@ -22,6 +22,7 @@ from .event_mapper import (
 )
 from opscopilot_api.logging import clear_log_context, set_log_context
 from .runtime_factory import RuntimeFactory
+from .title_service import TitleService
 from .stream_decisions import (
     StreamEventDecider,
     StreamLifecycleTracker,
@@ -52,17 +53,34 @@ class ChatService:
         message_repo: repositories.MessageRepository,
         runtime_factory: RuntimeFactory,
         recorder_factory: Callable[[str, str], AgentRunRecorder] = AgentRunRecorder,
+        title_service: TitleService | None = None,
     ) -> None:
         self._session_repo = session_repo
         self._message_repo = message_repo
         self._runtime_factory = runtime_factory
         self._recorder_factory = recorder_factory
+        self._title_service = title_service
         self._tracer = trace.get_tracer("opscopilot_api.chat")
         self._logger = logging.getLogger("opscopilot_api.chat")
         meter = metrics.get_meter("opscopilot_api.chat")
         self._agent_runs_total = meter.create_counter("agent_runs_total")
         self._agent_run_failures_total = meter.create_counter("agent_run_failures_total")
         self._agent_run_duration_ms = meter.create_histogram("agent_run_duration_ms")
+
+    def _fire_title_generation(self, session_id: str, prompt: str, run_id: str) -> None:
+        if self._title_service is None:
+            return
+        title_service = self._title_service
+
+        def _generate() -> None:
+            fresh_ctx = otel_context.Context()
+            token = otel_context.attach(fresh_ctx)
+            try:
+                title_service.generate_and_persist(session_id=session_id, prompt=prompt, run_id=run_id)
+            finally:
+                otel_context.detach(token)
+
+        threading.Thread(target=_generate, daemon=True).start()
 
     def _load_prompt_history(self, session_id: str) -> list[str]:
         messages = list(self._message_repo.list_by_session(session_id))
@@ -258,6 +276,8 @@ class ChatService:
 
                 span.set_attribute("langfuse.trace.output", answer_text or "")
                 span.set_attribute("langfuse.observation.output", json.dumps(answer_text or ""))
+                if not prompt_history and not result.error:
+                    self._fire_title_generation(session_id=session_id, prompt=prompt, run_id=run_id)
                 return ChatResult(
                     run_id=run_id,
                     answer=answer_text,
@@ -278,6 +298,7 @@ class ChatService:
 
         run_id = str(uuid4())
         prompt_history = self._load_prompt_history(session_id)
+        is_first_message = not prompt_history
         now = datetime.now(timezone.utc)
         self._message_repo.create(
             models.Message(
@@ -453,6 +474,8 @@ class ChatService:
                             _final_message = persistence.get("message") or ""
                             span.set_attribute("langfuse.trace.output", _final_message)
                             span.set_attribute("langfuse.observation.output", json.dumps(_final_message))
+                            if is_first_message and item.get("__terminal__") == "answer":
+                                self._fire_title_generation(session_id=session_id, prompt=prompt, run_id=run_id)
                             for event in events:
                                 yield event
                             break

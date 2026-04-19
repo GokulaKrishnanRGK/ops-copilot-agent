@@ -15,6 +15,7 @@ import {
   sessionStreamUrl,
   useCreateSessionMutation,
   useDeleteSessionMutation,
+  useLazyGetSessionQuery,
   useLazyListSessionsQuery,
   useRenameSessionMutation,
 } from "./store/api/sessionApi";
@@ -132,6 +133,7 @@ function streamLogMessagesFromEvent(event: ChatEvent): StreamLogEvent | null {
 export function App() {
   const [fetchSessionsPage, { isFetching: isFetchingSessions, error: sessionsError }] =
     useLazyListSessionsQuery();
+  const [fetchSession] = useLazyGetSessionQuery();
   const [createSession, { isLoading: isCreatingSession }] = useCreateSessionMutation();
   const [renameSession, { isLoading: isRenamingSession }] = useRenameSessionMutation();
   const [deleteSession, { isLoading: isDeletingSession }] = useDeleteSessionMutation();
@@ -165,6 +167,7 @@ export function App() {
   const scrollRestoreRef = useRef<{ previousTop: number; previousHeight: number } | null>(null);
   const [liveEvent, setLiveEvent] = useState<LiveEvent | null>(null);
   const [error, setError] = useState<string>("");
+  const [awaitingTitleSessionIds, setAwaitingTitleSessionIds] = useState<Set<string>>(new Set());
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [activeView, setActiveView] = useState<"chat" | "settings">("chat");
@@ -590,10 +593,52 @@ export function App() {
     return next;
   }
 
+  async function pollForTitle(sessionId: string): Promise<void> {
+    const MAX_ATTEMPTS = 3;
+    const DELAY_MS = 1500;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, DELAY_MS));
+      try {
+        const session = await fetchSession(sessionId).unwrap();
+        if (session.title) {
+          setSessions((prev) =>
+            prev.map((s) => (s.id === sessionId ? { ...s, title: session.title } : s))
+          );
+          setAwaitingTitleSessionIds((prev) => {
+            const next = new Set(prev);
+            next.delete(sessionId);
+            return next;
+          });
+          return;
+        }
+      } catch {
+        // continue polling
+      }
+    }
+    setAwaitingTitleSessionIds((prev) => {
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!activeSessionId || !input.trim()) {
       return;
+    }
+
+    const capturedSessionId = activeSessionId;
+    const sessionHadTitle = sessions.find((s) => s.id === capturedSessionId)?.title != null;
+    const stopAwaiting = (sid: string) => {
+      setAwaitingTitleSessionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sid);
+        return next;
+      });
+    };
+    if (!sessionHadTitle) {
+      setAwaitingTitleSessionIds((prev) => new Set([...prev, capturedSessionId]));
     }
 
     setError("");
@@ -733,6 +778,9 @@ export function App() {
                 });
               }
             }
+            if (!sessionHadTitle) {
+              void pollForTitle(capturedSessionId);
+            }
             setLiveEvent(null);
             setActiveRunId("");
             activeRunIdRef.current = "";
@@ -740,6 +788,9 @@ export function App() {
           }
 
           if (chatEvent.type === "agent_run.failed") {
+            if (!sessionHadTitle) {
+              stopAwaiting(capturedSessionId);
+            }
             setLiveEvent(null);
             setActiveRunId("");
             activeRunIdRef.current = "";
@@ -751,6 +802,9 @@ export function App() {
           }
 
           if (chatEvent.type === "error") {
+            if (!sessionHadTitle) {
+              stopAwaiting(capturedSessionId);
+            }
             const message = chatEvent.payload.message;
             if (typeof message === "string" && message.trim()) {
               setError(message);
@@ -773,12 +827,18 @@ export function App() {
         }
       );
       if (!streamResult.terminalReceived) {
+        if (!sessionHadTitle) {
+          stopAwaiting(capturedSessionId);
+        }
         setLiveEvent(null);
         setActiveRunId("");
         activeRunIdRef.current = "";
         setError("stream ended before a terminal event");
       }
     } catch (err) {
+      if (!sessionHadTitle) {
+        stopAwaiting(capturedSessionId);
+      }
       setError(errorMessageFromUnknown(err, "request failed"));
       setLiveEvent(null);
       setActiveRunId("");
@@ -818,6 +878,7 @@ export function App() {
         <SessionsPanel
           sessions={sessions}
           activeSessionId={activeSessionId}
+          awaitingTitleSessionIds={awaitingTitleSessionIds}
           footer={<SafetyBoundaryPanel />}
           editingSessionId={editingSessionId}
           editingTitle={editingTitle}

@@ -18,6 +18,9 @@ class SessionRepo:
     def get(self, session_id: str) -> models.Session | None:
         return self._db.query(models.Session).filter(models.Session.id == session_id).one_or_none()
 
+    def find_by_title(self, title: str) -> models.Session | None:
+        return self._db.query(models.Session).filter(models.Session.title == title).first()
+
     def list(self, limit: int | None = None, offset: int = 0) -> Iterable[models.Session]:
         query = self._db.query(models.Session).order_by(models.Session.created_at.desc()).offset(offset)
         if limit is not None:

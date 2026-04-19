@@ -5,6 +5,7 @@ import { MoreIcon, PlusIcon } from "./icons";
 type SessionsPanelProps = {
   sessions: Session[];
   activeSessionId: string;
+  awaitingTitleSessionIds?: Set<string>;
   editingSessionId: string;
   editingTitle: string;
   openMenuSessionId: string;
@@ -33,6 +34,7 @@ function sessionLabel(session: Session): string {
 export function SessionsPanel({
   sessions,
   activeSessionId,
+  awaitingTitleSessionIds,
   editingSessionId,
   editingTitle,
   openMenuSessionId,
@@ -100,9 +102,13 @@ export function SessionsPanel({
                   <button
                     className="session-select"
                     onClick={() => onSelectSession(session.id)}
-                    title={sessionLabel(session)}
+                    title={awaitingTitleSessionIds?.has(session.id) ? "Generating title…" : sessionLabel(session)}
                   >
-                    <span className="session-label">{sessionLabel(session)}</span>
+                    {awaitingTitleSessionIds?.has(session.id) ? (
+                      <span className="session-label-skeleton" aria-label="Generating title…" />
+                    ) : (
+                      <span className="session-label">{sessionLabel(session)}</span>
+                    )}
                   </button>
                   <button
                     className="session-more-button"
