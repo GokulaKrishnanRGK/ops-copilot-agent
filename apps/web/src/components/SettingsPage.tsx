@@ -45,6 +45,11 @@ type EmbeddingErrors = {
   bedrock_embedding_model_id?: string;
 };
 
+type TitleGenErrors = {
+  title_gen_model_id?: string;
+  title_gen_prompt_version?: string;
+};
+
 // ── validators ─────────────────────────────────────────────────────────────
 
 const NODE_LABELS: Record<keyof SettingsNodes, string> = {
@@ -180,7 +185,7 @@ function ModelConfigSection({ nodes, errors, onChange }: ModelConfigSectionProps
                 className={`settings-input${err?.model_id ? " settings-input-error" : ""}`}
                 value={node.model_id}
                 onChange={(e: { target: { value: string } }) => setNode(key, { model_id: e.target.value })}
-                placeholder="e.g. anthropic.claude-3-haiku-20240307-v1:0"
+                placeholder="e.g. global.anthropic.claude-haiku-4-5-20251001-v1:0"
                 spellCheck={false}
               />
               {err?.model_id && <span className="settings-field-error">{err.model_id}</span>}
@@ -355,7 +360,7 @@ function EvalSamplingSection({
               className={`settings-input${errors.eval_judge_model_id ? " settings-input-error" : ""}`}
               value={judgeModelId}
               onChange={(e: { target: { value: string } }) => onJudgeModelChange(e.target.value)}
-              placeholder="anthropic.claude-3-haiku-20240307-v1:0"
+              placeholder="global.anthropic.claude-haiku-4-5-20251001-v1:0"
               spellCheck={false}
             />
             {errors.eval_judge_model_id && <span className="settings-field-error">{errors.eval_judge_model_id}</span>}
@@ -501,6 +506,55 @@ function AgentHardLimitsSection({ toolCalls, llmCalls, execTime, errors, onToolC
   );
 }
 
+// ── title generation section ───────────────────────────────────────────────
+
+type TitleGenSectionProps = {
+  modelId: string;
+  promptVersion: string;
+  errors: TitleGenErrors;
+  onModelIdChange: (v: string) => void;
+  onPromptVersionChange: (v: string) => void;
+};
+
+function TitleGenerationSection({ modelId, promptVersion, errors, onModelIdChange, onPromptVersionChange }: TitleGenSectionProps) {
+  return (
+    <div className="limits-grid">
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Model ID</span>
+          <span className="limits-field-unit">model used for title generation</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input${errors.title_gen_model_id ? " settings-input-error" : ""}`}
+            value={modelId}
+            onChange={(e: { target: { value: string } }) => onModelIdChange(e.target.value)}
+            placeholder="global.anthropic.claude-haiku-4-5-20251001-v1:0"
+            spellCheck={false}
+          />
+          {errors.title_gen_model_id && <span className="settings-field-error">{errors.title_gen_model_id}</span>}
+        </div>
+      </div>
+      <div className="limits-row">
+        <div className="limits-row-label">
+          <span className="limits-field-name">Prompt Version</span>
+          <span className="limits-field-unit">version of the title gen prompt</span>
+        </div>
+        <div className="settings-field">
+          <input
+            className={`settings-input${errors.title_gen_prompt_version ? " settings-input-error" : ""}`}
+            value={promptVersion}
+            onChange={(e: { target: { value: string } }) => onPromptVersionChange(e.target.value)}
+            placeholder="latest"
+            spellCheck={false}
+          />
+          {errors.title_gen_prompt_version && <span className="settings-field-error">{errors.title_gen_prompt_version}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── page ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_NODE: NodeConfig = { model_id: "", prompt_version: "latest" };
@@ -536,6 +590,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [execTimeRaw, setExecTimeRaw] = useState("");
   const [hardLimitErrors, setHardLimitErrors] = useState<HardLimitErrors>({});
   const [embeddingErrors, setEmbeddingErrors] = useState<EmbeddingErrors>({});
+  const [titleGenErrors, setTitleGenErrors] = useState<TitleGenErrors>({});
 
   useEffect(() => {
     if (data && !draft) {
@@ -580,6 +635,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     const embErrors: EmbeddingErrors = !draft.bedrock_embedding_model_id.trim()
       ? { bedrock_embedding_model_id: "Required" }
       : {};
+    const tgErrors: TitleGenErrors = {};
+    if (!draft.title_gen_model_id.trim()) tgErrors.title_gen_model_id = "Required";
+    if (!draft.title_gen_prompt_version.trim()) tgErrors.title_gen_prompt_version = "Required";
 
     setNodeErrors(nErrors);
     setLimitsErrors(lErrors);
@@ -587,8 +645,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setEvalErrors(eErrors);
     setHardLimitErrors(hlErrors);
     setEmbeddingErrors(embErrors);
+    setTitleGenErrors(tgErrors);
 
-    if (hasErrors(nErrors, lErrors, hErrors, eErrors, hlErrors, embErrors)) return;
+    if (hasErrors(nErrors, lErrors, hErrors, eErrors, hlErrors, embErrors, tgErrors)) return;
 
     setSaveError(null);
 
@@ -713,6 +772,20 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     const embErrors: EmbeddingErrors = !v.trim() ? { bedrock_embedding_model_id: "Required" } : {};
     setEmbeddingErrors(embErrors);
     setDraft({ ...draft, bedrock_embedding_model_id: v });
+  }
+
+  function handleTitleGenModelIdChange(v: string) {
+    if (!draft) return;
+    setIsDirty(true);
+    setTitleGenErrors((prev) => ({ ...prev, title_gen_model_id: v.trim() ? undefined : "Required" }));
+    setDraft({ ...draft, title_gen_model_id: v });
+  }
+
+  function handleTitleGenPromptVersionChange(v: string) {
+    if (!draft) return;
+    setIsDirty(true);
+    setTitleGenErrors((prev) => ({ ...prev, title_gen_prompt_version: v.trim() ? undefined : "Required" }));
+    setDraft({ ...draft, title_gen_prompt_version: v });
   }
 
   return (
@@ -847,6 +920,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 modelId={draft?.bedrock_embedding_model_id ?? ""}
                 error={embeddingErrors.bedrock_embedding_model_id}
                 onChange={handleEmbeddingModelChange}
+              />
+            </SettingsSection>
+            <SettingsSection
+              title="Title Generation"
+              description="Model and prompt version used to auto-generate session titles after the first message."
+            >
+              <TitleGenerationSection
+                modelId={draft?.title_gen_model_id ?? ""}
+                promptVersion={draft?.title_gen_prompt_version ?? ""}
+                errors={titleGenErrors}
+                onModelIdChange={handleTitleGenModelIdChange}
+                onPromptVersionChange={handleTitleGenPromptVersionChange}
               />
             </SettingsSection>
           </div>

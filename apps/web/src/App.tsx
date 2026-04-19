@@ -15,7 +15,6 @@ import {
   sessionStreamUrl,
   useCreateSessionMutation,
   useDeleteSessionMutation,
-  useLazyGetSessionQuery,
   useLazyListSessionsQuery,
   useRenameSessionMutation,
 } from "./store/api/sessionApi";
@@ -133,7 +132,7 @@ function streamLogMessagesFromEvent(event: ChatEvent): StreamLogEvent | null {
 export function App() {
   const [fetchSessionsPage, { isFetching: isFetchingSessions, error: sessionsError }] =
     useLazyListSessionsQuery();
-  const [fetchSession] = useLazyGetSessionQuery();
+
   const [createSession, { isLoading: isCreatingSession }] = useCreateSessionMutation();
   const [renameSession, { isLoading: isRenamingSession }] = useRenameSessionMutation();
   const [deleteSession, { isLoading: isDeletingSession }] = useDeleteSessionMutation();
@@ -471,7 +470,7 @@ export function App() {
   async function onCreateSession() {
     setError("");
     try {
-      const created = await createSession({ title: `Session ${sessions.length + 1}` }).unwrap();
+      const created = await createSession({ title: "New chat" }).unwrap();
       await loadSessionsPage({ offset: 0, limit: initialSessionPageSize, replace: true });
       setActiveSessionId(created.id);
       setEditingSessionId("");
@@ -488,7 +487,7 @@ export function App() {
     setError("");
     setOpenMenuSessionId("");
     setEditingSessionId(session.id);
-    setEditingTitle(session.title ?? "");
+    setEditingTitle(session.title === "New chat" ? "" : (session.title ?? ""));
   }
 
   function onCancelRename() {
@@ -500,6 +499,10 @@ export function App() {
     const nextTitle = editingTitle.trim();
     if (!nextTitle) {
       setError("session title is required");
+      return;
+    }
+    if (nextTitle.toLowerCase() === "new chat") {
+      setError("\"New chat\" is reserved for untitled sessions");
       return;
     }
 
@@ -593,35 +596,6 @@ export function App() {
     return next;
   }
 
-  async function pollForTitle(sessionId: string): Promise<void> {
-    const MAX_ATTEMPTS = 3;
-    const DELAY_MS = 1500;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      await new Promise<void>((resolve) => setTimeout(resolve, DELAY_MS));
-      try {
-        const session = await fetchSession(sessionId).unwrap();
-        if (session.title) {
-          setSessions((prev) =>
-            prev.map((s) => (s.id === sessionId ? { ...s, title: session.title } : s))
-          );
-          setAwaitingTitleSessionIds((prev) => {
-            const next = new Set(prev);
-            next.delete(sessionId);
-            return next;
-          });
-          return;
-        }
-      } catch {
-        // continue polling
-      }
-    }
-    setAwaitingTitleSessionIds((prev) => {
-      const next = new Set(prev);
-      next.delete(sessionId);
-      return next;
-    });
-  }
-
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!activeSessionId || !input.trim()) {
@@ -629,7 +603,8 @@ export function App() {
     }
 
     const capturedSessionId = activeSessionId;
-    const sessionHadTitle = sessions.find((s) => s.id === capturedSessionId)?.title != null;
+    const currentTitle = sessions.find((s) => s.id === capturedSessionId)?.title;
+    const sessionHadTitle = currentTitle != null && currentTitle !== "New chat";
     const stopAwaiting = (sid: string) => {
       setAwaitingTitleSessionIds((prev) => {
         const next = new Set(prev);
@@ -758,6 +733,17 @@ export function App() {
             return;
           }
 
+          if (chatEvent.type === "session.title.updated") {
+            const title = chatEvent.payload.title;
+            if (typeof title === "string" && title.trim()) {
+              setSessions((prev) =>
+                prev.map((s) => (s.id === capturedSessionId ? { ...s, title } : s))
+              );
+            }
+            stopAwaiting(capturedSessionId);
+            return;
+          }
+
           if (chatEvent.type === "agent_run.completed") {
             const runId =
               typeof chatEvent.agent_run_id === "string" && chatEvent.agent_run_id
@@ -777,9 +763,6 @@ export function App() {
                   return next;
                 });
               }
-            }
-            if (!sessionHadTitle) {
-              void pollForTitle(capturedSessionId);
             }
             setLiveEvent(null);
             setActiveRunId("");
@@ -844,6 +827,9 @@ export function App() {
       setActiveRunId("");
       activeRunIdRef.current = "";
     } finally {
+      if (!sessionHadTitle) {
+        stopAwaiting(capturedSessionId);
+      }
       setLoading(false);
       void refetchRuns();
     }

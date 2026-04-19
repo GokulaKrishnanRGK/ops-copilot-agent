@@ -32,6 +32,8 @@ class SettingsResponse(BaseModel):
     agent_max_llm_calls: int
     agent_max_execution_time_ms: int
     bedrock_embedding_model_id: str
+    title_gen_model_id: str
+    title_gen_prompt_version: str
 
 
 class SettingsUpdate(BaseModel):
@@ -49,3 +51,5 @@ class SettingsUpdate(BaseModel):
     agent_max_llm_calls: int = Field(ge=1)
     agent_max_execution_time_ms: int = Field(ge=1)
     bedrock_embedding_model_id: str = Field(min_length=1)
+    title_gen_model_id: str = Field(min_length=1)
+    title_gen_prompt_version: str = Field(min_length=1)

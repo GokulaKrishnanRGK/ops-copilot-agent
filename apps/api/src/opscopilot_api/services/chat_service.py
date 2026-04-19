@@ -67,20 +67,31 @@ class ChatService:
         self._agent_run_failures_total = meter.create_counter("agent_run_failures_total")
         self._agent_run_duration_ms = meter.create_histogram("agent_run_duration_ms")
 
-    def _fire_title_generation(self, session_id: str, prompt: str, run_id: str) -> None:
+    def _start_title_generation(self, session_id: str, prompt: str, run_id: str) -> "Queue[str | None]":
+        title_queue: Queue = Queue()
         if self._title_service is None:
-            return
+            self._logger.debug("title generation skipped: no title_service configured [session=%s]", session_id)
+            title_queue.put(None)
+            return title_queue
+        self._logger.debug("title generation starting background thread [session=%s run=%s]", session_id, run_id)
         title_service = self._title_service
 
         def _generate() -> None:
             fresh_ctx = otel_context.Context()
             token = otel_context.attach(fresh_ctx)
             try:
-                title_service.generate_and_persist(session_id=session_id, prompt=prompt, run_id=run_id)
+                self._logger.debug("title generation thread started [session=%s run=%s]", session_id, run_id)
+                title = title_service.generate_and_persist(session_id=session_id, prompt=prompt, run_id=run_id)
+                self._logger.debug("title generation thread finished title=%r [session=%s run=%s]", title, session_id, run_id)
+                title_queue.put(title)
+            except Exception:
+                self._logger.exception("title generation thread raised an exception [session=%s run=%s]", session_id, run_id)
+                title_queue.put(None)
             finally:
                 otel_context.detach(token)
 
         threading.Thread(target=_generate, daemon=True).start()
+        return title_queue
 
     def _load_prompt_history(self, session_id: str) -> list[str]:
         messages = list(self._message_repo.list_by_session(session_id))
@@ -277,7 +288,7 @@ class ChatService:
                 span.set_attribute("langfuse.trace.output", answer_text or "")
                 span.set_attribute("langfuse.observation.output", json.dumps(answer_text or ""))
                 if not prompt_history and not result.error:
-                    self._fire_title_generation(session_id=session_id, prompt=prompt, run_id=run_id)
+                    self._start_title_generation(session_id=session_id, prompt=prompt, run_id=run_id)
                 return ChatResult(
                     run_id=run_id,
                     answer=answer_text,
@@ -474,10 +485,34 @@ class ChatService:
                             _final_message = persistence.get("message") or ""
                             span.set_attribute("langfuse.trace.output", _final_message)
                             span.set_attribute("langfuse.observation.output", json.dumps(_final_message))
+                            title_queue: "Queue[str | None] | None" = None
+                            self._logger.debug(
+                                "terminal item received type=%r is_first_message=%s [session=%s run=%s]",
+                                item.get("__terminal__"),
+                                is_first_message,
+                                session_id,
+                                run_id,
+                            )
                             if is_first_message and item.get("__terminal__") == "answer":
-                                self._fire_title_generation(session_id=session_id, prompt=prompt, run_id=run_id)
+                                title_queue = self._start_title_generation(
+                                    session_id=session_id, prompt=prompt, run_id=run_id
+                                )
                             for event in events:
                                 yield event
+                            if title_queue is not None:
+                                self._logger.debug("waiting for title queue [session=%s run=%s]", session_id, run_id)
+                                try:
+                                    title = title_queue.get(timeout=5.0)
+                                    self._logger.debug("title queue returned title=%r [session=%s run=%s]", title, session_id, run_id)
+                                    if title:
+                                        yield runtime_event(
+                                            session_id,
+                                            run_id,
+                                            "session.title.updated",
+                                            {"title": title, "session_id": session_id},
+                                        )
+                                except Empty:
+                                    self._logger.warning("title queue timed out after 5s [session=%s run=%s]", session_id, run_id)
                             break
                         if item is done:
                             break

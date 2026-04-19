@@ -181,7 +181,7 @@ def _success_evaluator(*, input, output, expected_output=None, **kwargs):
 def _build_llm_judge_evaluator():
     scorer = LlmJudgeScorer(
         provider=BedrockProvider(),
-        model_id=os.getenv("EVAL_JUDGE_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
+        model_id=os.getenv("EVAL_JUDGE_MODEL_ID", "global.anthropic.claude-haiku-4-5-20251001-v1:0"),
         budget=BudgetEnforcer(BudgetState(max_usd=_read_eval_budget(), total_usd=0.0)),
         ledger=CostLedger(),
         langfuse=NoOpLangfuseAdapter(),

@@ -26,12 +26,14 @@ def _valid_patch_payload(**overrides) -> dict:
         "eval_sample_rate": 0.1,
         "eval_llm_judge_enabled": True,
         "eval_ragas_enabled": True,
-        "eval_judge_model_id": "anthropic.claude-3-haiku-20240307-v1:0",
+        "eval_judge_model_id": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
         "prompt_injection_llm_check": False,
         "agent_max_tool_calls": 10,
         "agent_max_llm_calls": 10,
         "agent_max_execution_time_ms": 30000,
         "bedrock_embedding_model_id": "amazon.titan-embed-text-v1",
+        "title_gen_model_id": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "title_gen_prompt_version": "latest",
     }
     base.update(overrides)
     return base

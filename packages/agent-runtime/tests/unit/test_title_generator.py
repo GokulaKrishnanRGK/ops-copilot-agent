@@ -34,7 +34,7 @@ def _make_generator(prompt_source=None, prompt_version: str = "v1"):
     ledger = MagicMock()
     return LlmTitleGenerator(
         provider=provider,
-        model_id="anthropic.claude-3-haiku-20240307-v1:0",
+        model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
         budget=budget,
         ledger=ledger,
         prompt_source=prompt_source or _make_prompt_source(),

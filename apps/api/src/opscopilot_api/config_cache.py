@@ -24,13 +24,13 @@ class RuntimeConfigData:
     eval_sample_rate: float = 0.1
     eval_llm_judge_enabled: bool = True
     eval_ragas_enabled: bool = True
-    eval_judge_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    eval_judge_model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
     prompt_injection_llm_check: bool = False
     agent_max_tool_calls: int = 10
     agent_max_llm_calls: int = 10
     agent_max_execution_time_ms: int = 30_000
     bedrock_embedding_model_id: str = "amazon.titan-embed-text-v1"
-    title_gen_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    title_gen_model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
     title_gen_prompt_version: str = "latest"
 
     def node(self, name: str) -> NodeConfig:
@@ -63,13 +63,13 @@ class RuntimeConfigData:
             eval_sample_rate=float(env.get("eval_sample_rate", 0.1)),
             eval_llm_judge_enabled=bool(env.get("eval_llm_judge_enabled", True)),
             eval_ragas_enabled=bool(env.get("eval_ragas_enabled", True)),
-            eval_judge_model_id=str(env.get("eval_judge_model_id", "anthropic.claude-3-haiku-20240307-v1:0")),
+            eval_judge_model_id=str(env.get("eval_judge_model_id", "global.anthropic.claude-haiku-4-5-20251001-v1:0")),
             prompt_injection_llm_check=bool(env.get("prompt_injection_llm_check", False)),
             agent_max_tool_calls=int(env.get("agent_max_tool_calls", 10)),
             agent_max_llm_calls=int(env.get("agent_max_llm_calls", 10)),
             agent_max_execution_time_ms=int(env.get("agent_max_execution_time_ms", 30000)),
             bedrock_embedding_model_id=str(env.get("bedrock_embedding_model_id", "amazon.titan-embed-text-v1")),
-            title_gen_model_id=str(env.get("title_gen_model_id", "anthropic.claude-3-haiku-20240307-v1:0")),
+            title_gen_model_id=str(env.get("title_gen_model_id", "global.anthropic.claude-haiku-4-5-20251001-v1:0")),
             title_gen_prompt_version=str(env.get("title_gen_prompt_version", "latest")),
         )
 
