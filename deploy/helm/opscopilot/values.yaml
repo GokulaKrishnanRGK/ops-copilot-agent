@@ -41,12 +41,18 @@ api:
     OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4318"
     OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
     OTEL_SERVICE_NAME: "ops-copilot-api"
+    LANGFUSE_HOST: ""
+    LANGFUSE_ENVIRONMENT: "production"
+    LANGFUSE_RELEASE: ""
   secretEnv: {}
   secretRefs: []
   secrets:
     databaseUrlKey: "DATABASE_URL"
     opensearchUsernameKey: "username"
     opensearchPasswordKey: "password"
+  langfuse:
+    publicKeyKey: "LANGFUSE_PUBLIC_KEY"
+    secretKeyKey: "LANGFUSE_SECRET_KEY"
 
 web:
   enabled: true
@@ -207,6 +213,9 @@ terraform:
         passwordSecretName: ""
         usernameSecretArn: ""
         passwordSecretArn: ""
+      langfuse:
+        secretName: ""
+        secretArn: ""
   dnsContract:
     ingress_domain_name: ""
     route53_hosted_zone_id: ""

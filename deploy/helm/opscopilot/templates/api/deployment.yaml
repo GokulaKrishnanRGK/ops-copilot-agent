@@ -79,6 +79,18 @@ spec:
             - name: OPENSEARCH_INDEX
               value: {{ .Values.terraform.helmValues.api.env.opensearchIndex | quote }}
             {{- end }}
+            {{- if .Values.terraform.helmSecretRefs.api.langfuse.secretName }}
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.terraform.helmSecretRefs.api.langfuse.secretName | quote }}
+                  key: {{ .Values.api.langfuse.publicKeyKey | quote }}
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.terraform.helmSecretRefs.api.langfuse.secretName | quote }}
+                  key: {{ .Values.api.langfuse.secretKeyKey | quote }}
+            {{- end }}
             {{- if and .Values.artifacts.pythonPackageRegistry.enabled .Values.artifacts.pythonPackageRegistry.injectToApi $pythonRegistryUrl }}
             - name: PIP_INDEX_URL
               value: {{ $pythonRegistryUrl | quote }}

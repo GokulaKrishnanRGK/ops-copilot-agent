@@ -51,6 +51,8 @@ services:
       LANGFUSE_HOST: "${LANGFUSE_HOST_COMPOSE:-http://langfuse-web:3000}"
       LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-pk-lf-opscopilot-local}"
       LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-sk-lf-opscopilot-local}"
+      LANGFUSE_ENVIRONMENT: "${LANGFUSE_ENVIRONMENT:-local}"
+      LANGFUSE_RELEASE: "${LANGFUSE_RELEASE:-}"
     volumes:
       - "${LOGS_HOST_PATH}:${LOGS_HOST_PATH}"
     depends_on:
