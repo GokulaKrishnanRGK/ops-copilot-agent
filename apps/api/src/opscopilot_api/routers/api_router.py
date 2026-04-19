@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from .info_router import router as info_router
 from .messages_router import router as messages_router
 from .runs_router import router as runs_router
 from .sessions_router import router as sessions_router
@@ -7,6 +8,7 @@ from .settings_router import router as settings_router
 from .tool_calls_router import router as tool_calls_router
 
 router = APIRouter()
+router.include_router(info_router, tags=["info"])
 router.include_router(sessions_router, prefix="/sessions", tags=["sessions"])
 router.include_router(messages_router, prefix="/messages", tags=["messages"])
 router.include_router(runs_router, prefix="/runs", tags=["runs"])
