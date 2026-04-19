@@ -123,28 +123,53 @@ variable "artifacts_ecr_scan_on_push" {
 }
 
 variable "ingress_domain_name" {
-  description = "Primary DNS name for web ingress."
+  description = "FQDN for the application ingress (e.g. opscopilot.gokulakrishnanr.com)."
   type        = string
-  default     = ""
+  default     = "opscopilot.gokulakrishnanr.com"
 }
 
 variable "observability_domain_name" {
-  description = "DNS name for observability ingress (Grafana)."
+  description = "FQDN for the Grafana observability ingress (e.g. grafana.gokulakrishnanr.com)."
+  type        = string
+  default     = "grafana.gokulakrishnanr.com"
+}
+
+variable "langfuse_domain_name" {
+  description = "FQDN for the Langfuse ingress (e.g. langfuse.gokulakrishnanr.com)."
+  type        = string
+  default     = "langfuse.gokulakrishnanr.com"
+}
+
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with Zone:DNS:Edit permission on the target zone."
+  type        = string
+  sensitive   = true
+}
+
+variable "cloudflare_zone_name" {
+  description = "Cloudflare zone name (root domain)."
+  type        = string
+  default     = "gokulakrishnanr.com"
+}
+
+variable "app_alb_dns_name" {
+  description = "AWS ALB DNS hostname for the application ingress. Leave empty until ALB is provisioned."
   type        = string
   default     = ""
 }
 
-variable "route53_hosted_zone_id" {
-  description = "Route53 hosted zone ID for ingress record management."
+variable "observability_alb_dns_name" {
+  description = "AWS ALB DNS hostname for the observability (Grafana) ingress. Defaults to app_alb_dns_name when empty."
   type        = string
   default     = ""
 }
 
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for ingress TLS termination."
+variable "langfuse_alb_dns_name" {
+  description = "AWS ALB DNS hostname for the Langfuse ingress. Defaults to app_alb_dns_name when empty."
   type        = string
   default     = ""
 }
+
 
 variable "controllers_create_irsa_roles" {
   description = "Create IRSA IAM roles/policies for cluster controllers."

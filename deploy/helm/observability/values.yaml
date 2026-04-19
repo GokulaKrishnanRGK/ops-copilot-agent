@@ -57,14 +57,7 @@ grafana:
     alb:
       scheme: "internet-facing"
       targetType: "ip"
-      sslRedirect: 443
-      listenPortsJson: '[{"HTTP":80},{"HTTPS":443}]'
-    route53:
-      enabled: true
-      ttl: 60
-    tls:
-      certificateArn: ""
-      hostedZoneId: ""
+      listenPortsJson: '[{"HTTP":80}]'
 
 alloy:
   enabled: true
@@ -85,9 +78,5 @@ terraform:
     observability:
       grafana:
         domainName: ""
-        tls:
-          certificateArn: ""
   dnsContract:
     observability_domain_name: ""
-    route53_hosted_zone_id: ""
-    acm_certificate_arn: ""

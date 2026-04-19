@@ -117,18 +117,15 @@ output "helm_values" {
       pythonPackageRegistryUrl = module.artifacts.package_registry_url
     }
     ingress = {
-      domainName = var.ingress_domain_name != "" ? var.ingress_domain_name : null
-      tls = {
-        certificateArn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
-      }
+      domainName = local.app_fqdn
     }
     observability = {
       grafana = {
-        domainName = var.observability_domain_name != "" ? var.observability_domain_name : null
-        tls = {
-          certificateArn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
-        }
+        domainName = local.grafana_fqdn
       }
+    }
+    langfuse = {
+      domainName = local.langfuse_fqdn
     }
     controllers = {
       externalDns = {
@@ -158,6 +155,10 @@ output "helm_secret_refs" {
         usernameSecretArn  = module.opensearch.username_secret_arn
         passwordSecretArn  = module.opensearch.password_secret_arn
       }
+      langfuse = {
+        secretName = module.langfuse.secret_name
+        secretArn  = module.langfuse.secret_arn
+      }
     }
   }
 }
@@ -168,11 +169,11 @@ output "terraform_output_contract_version" {
 }
 
 output "dns_contract" {
-  description = "Domain/DNS/TLS contract placeholders for Route53 + ACM provisioning."
+  description = "Domain/DNS contract for Cloudflare-managed subdomains."
   value = {
-    ingress_domain_name       = var.ingress_domain_name != "" ? var.ingress_domain_name : null
-    observability_domain_name = var.observability_domain_name != "" ? var.observability_domain_name : null
-    route53_hosted_zone_id    = var.route53_hosted_zone_id != "" ? var.route53_hosted_zone_id : null
-    acm_certificate_arn       = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+    ingress_domain_name       = local.app_fqdn
+    observability_domain_name = local.grafana_fqdn
+    langfuse_domain_name      = local.langfuse_fqdn
+    cloudflare_zone_id        = local.dns_ready ? module.cloudflare_dns[0].zone_id : null
   }
 }

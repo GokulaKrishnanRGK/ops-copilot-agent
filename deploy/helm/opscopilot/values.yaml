@@ -119,13 +119,8 @@ ingress:
     enabled: true
     scheme: "internet-facing"
     targetType: "ip"
-    sslRedirect: 443
     healthcheckPath: "/health"
-    listenPortsJson: '[{"HTTP":80},{"HTTPS":443}]'
-  route53:
-    enabled: true
-    useExternalDNS: true
-    ttl: 60
+    listenPortsJson: '[{"HTTP":80}]'
   hosts:
     - host: ""
       paths:
@@ -137,8 +132,6 @@ ingress:
           pathType: Prefix
           service: api
           port: 8000
-  tls: []
-
 imagePullSecrets: []
 
 artifacts:
@@ -218,5 +211,4 @@ terraform:
         secretArn: ""
   dnsContract:
     ingress_domain_name: ""
-    route53_hosted_zone_id: ""
-    acm_certificate_arn: ""
+    langfuse_domain_name: ""

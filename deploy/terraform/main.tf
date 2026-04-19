@@ -62,6 +62,26 @@ module "eks" {
   public_access_cidrs     = var.eks_public_access_cidrs
 }
 
+module "langfuse" {
+  source = "./modules/langfuse"
+
+  name_prefix = local.name_prefix
+  tags        = local.common_tags
+}
+
+module "cloudflare_dns" {
+  count  = local.dns_ready ? 1 : 0
+  source = "./modules/cloudflare_dns"
+
+  zone_name                  = var.cloudflare_zone_name
+  app_subdomain              = "opscopilot"
+  grafana_subdomain          = "grafana"
+  langfuse_subdomain         = "langfuse"
+  app_alb_dns_name           = var.app_alb_dns_name
+  observability_alb_dns_name = var.observability_alb_dns_name
+  langfuse_alb_dns_name      = var.langfuse_alb_dns_name
+}
+
 module "controllers" {
   source = "./modules/controllers"
 

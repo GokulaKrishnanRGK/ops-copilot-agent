@@ -24,27 +24,6 @@ function compactModelId(modelId: string): string {
   return parts[parts.length - 1] || modelId;
 }
 
-function formatBudgetStatus(status: string): string {
-  if (!status.trim()) {
-    return "Unknown";
-  }
-  return status.replaceAll("_", " ");
-}
-
-function budgetStatusClass(status: string): string {
-  if (status === "available" || status === "exhausted" || status === "exceeded") {
-    return status;
-  }
-  return "unknown";
-}
-
-function budgetPercent(totalUsd: number, maxUsd: number | null): number {
-  if (maxUsd === null || maxUsd <= 0) {
-    return 0;
-  }
-  return Math.min(100, Math.max(0, (totalUsd / maxUsd) * 100));
-}
-
 export function UsageSummary({
   sessionMetrics,
   latestRun,
@@ -52,12 +31,6 @@ export function UsageSummary({
   onOpenDetails,
 }: UsageSummaryProps) {
   const latestRunMetrics = latestRun?.metrics ?? null;
-  const latestBudget = latestRunMetrics?.budget ?? null;
-  const latestBudgetMax = latestBudget?.max_usd ?? null;
-  const latestBudgetTotal = latestBudget?.total_usd ?? 0;
-  const latestBudgetRemaining = latestBudget?.remaining_usd ?? null;
-  const latestBudgetPercent = budgetPercent(latestBudgetTotal, latestBudgetMax);
-  const latestBudgetStatus = latestBudget?.status ?? "unknown";
   const primaryModel = latestRunMetrics?.model_usage[0] ?? null;
 
   const hasAnyMetrics = useMemo(() => {
@@ -73,40 +46,10 @@ export function UsageSummary({
 
   return (
     <div className="usage-summary">
-      <div className="budget-surface" title="Latest run budget">
-        <div className="budget-surface-main">
-          <span className="usage-group-label">Run budget</span>
-          <strong className={`budget-status ${budgetStatusClass(latestBudgetStatus)}`}>
-            {formatBudgetStatus(latestBudgetStatus)}
-          </strong>
-          {primaryModel ? (
-            <span title={primaryModel.model_id}>
-              {primaryModel.provider} / {compactModelId(primaryModel.model_id)}
-            </span>
-          ) : null}
-          <span>{formatCost(latestBudgetTotal)} spent</span>
-          <span>
-            {latestBudgetRemaining === null
-              ? "No limit"
-              : `${formatCost(latestBudgetRemaining)} remaining`}
-          </span>
-        </div>
-        <div className="budget-meter" aria-label="Latest run budget usage">
-          <span style={{ width: `${latestBudgetPercent}%` }} />
-        </div>
-      </div>
-      <div className="cost-status-row" title="Latest run estimated cost and budget state">
+      <div className="cost-status-row" title="Latest run estimated cost">
         <span className="cost-status-item">
           <span className="usage-group-label">Estimated cost</span>
           <strong>{formatCost(latestRunMetrics?.usage.cost_usd ?? 0)}</strong>
-        </span>
-        <span className="cost-status-item">
-          <span className="usage-group-label">Budget status</span>
-          <strong>{formatBudgetStatus(latestBudgetStatus)}</strong>
-        </span>
-        <span className="cost-status-item">
-          <span className="usage-group-label">Limit</span>
-          <strong>{latestBudgetMax === null ? "Unset" : formatCost(latestBudgetMax)}</strong>
         </span>
       </div>
       <div className="usage-row">
@@ -114,9 +57,6 @@ export function UsageSummary({
           <span className="usage-group-label">Session</span>
           <span className="usage-chip">
             Est. cost {formatCost(sessionMetrics?.usage.cost_usd ?? 0)}
-          </span>
-          <span className="usage-chip">
-            Budget {formatCost(sessionMetrics?.budget.total_usd ?? 0)}
           </span>
           <span className="usage-chip">
             In {formatNumber(sessionMetrics?.usage.tokens_input ?? 0)}
@@ -130,9 +70,6 @@ export function UsageSummary({
           <span className="usage-group-label">Latest run</span>
           <span className="usage-chip">
             Est. cost {formatCost(latestRunMetrics?.usage.cost_usd ?? 0)}
-          </span>
-          <span className="usage-chip">
-            Budget {formatCost(latestRunMetrics?.budget.total_usd ?? 0)}
           </span>
           <span className="usage-chip">
             In {formatNumber(latestRunMetrics?.usage.tokens_input ?? 0)}
