@@ -115,11 +115,14 @@ class RuntimeFactory:
             provider = BedrockProvider()
             budget = BudgetEnforcer(BudgetState(max_usd=0.01, total_usd=0.0))
             ledger = CostLedger()
+            prompt_source = prompt_source_from_env()
             return LlmTitleGenerator(
                 provider=provider,
                 model_id=self._config.title_gen_model_id,
                 budget=budget,
                 ledger=ledger,
+                prompt_source=prompt_source,
+                prompt_version=self._config.title_gen_prompt_version,
             )
         except Exception:
             return NoOpTitleGenerator()

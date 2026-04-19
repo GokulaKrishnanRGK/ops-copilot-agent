@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from opscopilot_agent_runtime.llm.title_generator import LlmTitleGenerator, NoOpTitleGenerator
 
 
@@ -23,7 +21,13 @@ def _make_response(text: str = "Pod Crash Loop Debug", error=None):
     return resp
 
 
-def _make_generator():
+def _make_prompt_source(text: str = "Generate a title.") -> MagicMock:
+    source = MagicMock()
+    source.get.return_value = text
+    return source
+
+
+def _make_generator(prompt_source=None, prompt_version: str = "v1"):
     provider = MagicMock()
     budget = MagicMock()
     budget.state.return_value = MagicMock(total_usd=0.0)
@@ -33,6 +37,8 @@ def _make_generator():
         model_id="anthropic.claude-3-haiku-20240307-v1:0",
         budget=budget,
         ledger=ledger,
+        prompt_source=prompt_source or _make_prompt_source(),
+        prompt_version=prompt_version,
     )
 
 
@@ -64,6 +70,46 @@ class TestLlmTitleGenerator:
         with patch.object(gen, "_call", return_value=resp):
             result = gen.generate("prompt", "s1", "r1")
         assert result == ""
+
+    def test_fetches_prompt_from_source(self):
+        source = _make_prompt_source("My system prompt.")
+        gen = _make_generator(prompt_source=source, prompt_version="v1")
+        with patch.object(gen, "_call", return_value=_make_response()):
+            gen.generate("prompt", "s1", "r1")
+        source.get.assert_called_once_with("title_gen", "v1")
+
+    def test_prompt_included_in_system_message(self):
+        source = _make_prompt_source("Custom system prompt text.")
+        gen = _make_generator(prompt_source=source)
+        captured = {}
+
+        def fake_call(request, agent_node, recorder):
+            captured["system"] = request.messages[0].content
+            return _make_response()
+
+        with patch.object(gen, "_call", side_effect=fake_call):
+            gen.generate("prompt", "s1", "r1")
+
+        assert captured["system"] == "Custom system prompt text."
+
+    def test_prompt_ref_included_in_request(self):
+        source = _make_prompt_source()
+        ref_result = MagicMock()
+        ref_result.name = "title_gen"
+        source.ref.return_value = ref_result
+        gen = _make_generator(prompt_source=source, prompt_version="v1")
+        captured = {}
+
+        def fake_call(request, agent_node, recorder):
+            captured["prompt_ref"] = request.prompt_ref
+            return _make_response()
+
+        with patch.object(gen, "_call", side_effect=fake_call):
+            gen.generate("prompt", "s1", "r1")
+
+        assert captured["prompt_ref"] is not None
+        assert captured["prompt_ref"].name == "title_gen"
+        source.ref.assert_called_once_with("title_gen", "v1")
 
     def test_passes_session_and_run_in_request(self):
         gen = _make_generator()

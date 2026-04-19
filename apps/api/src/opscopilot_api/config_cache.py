@@ -31,6 +31,7 @@ class RuntimeConfigData:
     agent_max_execution_time_ms: int = 30_000
     bedrock_embedding_model_id: str = "amazon.titan-embed-text-v1"
     title_gen_model_id: str = "anthropic.claude-3-haiku-20240307-v1:0"
+    title_gen_prompt_version: str = "latest"
 
     def node(self, name: str) -> NodeConfig:
         try:
@@ -69,6 +70,7 @@ class RuntimeConfigData:
             agent_max_execution_time_ms=int(env.get("agent_max_execution_time_ms", 30000)),
             bedrock_embedding_model_id=str(env.get("bedrock_embedding_model_id", "amazon.titan-embed-text-v1")),
             title_gen_model_id=str(env.get("title_gen_model_id", "anthropic.claude-3-haiku-20240307-v1:0")),
+            title_gen_prompt_version=str(env.get("title_gen_prompt_version", "latest")),
         )
 
 
