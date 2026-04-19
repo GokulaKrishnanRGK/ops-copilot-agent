@@ -1,6 +1,7 @@
 import { FormEvent, UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChatPanel, LiveEvent, RenderMessage } from "./components/ChatPanel";
 import { buildChatTranscript } from "./components/ChatTranscript";
+import { SafetyBoundaryPanel } from "./components/SafetyBoundaryPanel";
 import { SessionsPanel } from "./components/SessionsPanel";
 import { SettingsPage } from "./components/SettingsPage";
 import { ThemeSelector } from "./components/ThemeSelector";
@@ -817,6 +818,7 @@ export function App() {
         <SessionsPanel
           sessions={sessions}
           activeSessionId={activeSessionId}
+          footer={<SafetyBoundaryPanel />}
           editingSessionId={editingSessionId}
           editingTitle={editingTitle}
           openMenuSessionId={openMenuSessionId}

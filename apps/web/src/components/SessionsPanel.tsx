@@ -1,4 +1,4 @@
-import { UIEvent } from "react";
+import { ReactNode, UIEvent } from "react";
 import { Session } from "../types";
 import { MoreIcon, PlusIcon } from "./icons";
 
@@ -14,6 +14,7 @@ type SessionsPanelProps = {
     renaming: boolean;
     deleting: boolean;
   };
+  footer?: ReactNode;
   onCreateSession: () => void;
   onSelectSession: (sessionId: string) => void;
   onStartRename: (session: Session) => void;
@@ -37,6 +38,7 @@ export function SessionsPanel({
   openMenuSessionId,
   hasMoreSessions,
   loadingState,
+  footer,
   onCreateSession,
   onSelectSession,
   onStartRename,
@@ -140,6 +142,7 @@ export function SessionsPanel({
         })}
         {hasMoreSessions ? <li className="session-load-hint">Scroll for more sessions</li> : null}
       </ul>
+      {footer}
     </aside>
   );
 }

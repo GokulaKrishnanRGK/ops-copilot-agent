@@ -900,6 +900,53 @@
     border-color: var(--brand);
   }
 
+  .safety-boundary {
+    border-top: 1px solid var(--border);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .safety-boundary-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .safety-boundary-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    color: var(--brand);
+  }
+
+  .safety-boundary-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--brand);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .safety-boundary-ns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .safety-ns-chip {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--brand) 40%, var(--border) 60%);
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+    white-space: nowrap;
+  }
+
   @media (max-width: 1080px) {
     .sessions {
       height: 360px;
