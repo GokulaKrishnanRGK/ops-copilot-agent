@@ -18,7 +18,7 @@ class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), nullable=False)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
@@ -39,7 +39,7 @@ class AgentRun(Base):
     __tablename__ = "agent_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), nullable=False)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
     runtime_config_id: Mapped[str | None] = mapped_column(ForeignKey("runtime_configs.id"), nullable=True)
     started_at: Mapped[str] = mapped_column(DateTime, nullable=False)
     ended_at: Mapped[str | None] = mapped_column(DateTime, nullable=True)
@@ -51,7 +51,7 @@ class LlmCall(Base):
     __tablename__ = "llm_calls"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), nullable=False)
+    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
     agent_node: Mapped[str] = mapped_column(String, nullable=False)
     model_id: Mapped[str] = mapped_column(String, nullable=False)
     tokens_input: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -66,7 +66,7 @@ class ToolCall(Base):
     __tablename__ = "tool_calls"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), nullable=False)
+    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
     tool_name: Mapped[str] = mapped_column(String, nullable=False)
     args_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
@@ -82,7 +82,7 @@ class BudgetEvent(Base):
     __tablename__ = "budget_events"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), nullable=False)
+    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
     delta_usd: Mapped[float] = mapped_column(Numeric, nullable=False)
     total_usd: Mapped[float] = mapped_column(Numeric, nullable=False)
