@@ -31,6 +31,7 @@ metadata:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": {{ .Values.ragIngest.hook.deletePolicy | quote }}
     "helm.sh/hook-weight": {{ .Values.ragIngest.hook.weight | quote }}
+    "helm.sh/hook-fail-policy": "ignore"
   {{- end }}
 spec:
   backoffLimit: {{ .Values.ragIngest.backoffLimit }}

@@ -174,7 +174,7 @@ ragIngest:
   enabled: true
   hook:
     enabled: true
-    deletePolicy: "before-hook-creation,hook-succeeded"
+    deletePolicy: "before-hook-creation"
     weight: "0"
   backoffLimit: 1
   activeDeadlineSeconds: 600
