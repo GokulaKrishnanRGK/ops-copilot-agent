@@ -23,6 +23,7 @@ fi
 if [ -n "${AWS_PROFILE:-}" ]; then
   aws_args+=(--profile "${AWS_PROFILE}")
 fi
+_aws() { aws ${aws_args[@]+"${aws_args[@]}"} "$@"; }
 
 if [ -f "${env_file}" ]; then
   # shellcheck disable=SC1090
@@ -69,7 +70,7 @@ db_source_secret_id="${db_secret_name}"
 if [ -n "${db_secret_arn}" ]; then
   db_source_secret_id="${db_secret_arn}"
 fi
-db_secret_string="$(aws "${aws_args[@]}" secretsmanager get-secret-value --secret-id "${db_source_secret_id}" --query SecretString --output text)"
+db_secret_string="$(_aws secretsmanager get-secret-value --secret-id "${db_source_secret_id}" --query SecretString --output text)"
 
 db_username="$(printf "%s" "${db_secret_string}" | jq -r '.username // empty')"
 db_password="$(printf "%s" "${db_secret_string}" | jq -r '.password // empty')"
@@ -96,8 +97,8 @@ kubectl -n "${namespace}" create secret generic "${db_secret_name}" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 # OpenSearch username/password are stored as plain strings in separate secrets.
-os_user_value="$(aws "${aws_args[@]}" secretsmanager get-secret-value --secret-id "${os_user_secret_name}" --query SecretString --output text)"
-os_pass_value="$(aws "${aws_args[@]}" secretsmanager get-secret-value --secret-id "${os_pass_secret_name}" --query SecretString --output text)"
+os_user_value="$(_aws secretsmanager get-secret-value --secret-id "${os_user_secret_name}" --query SecretString --output text)"
+os_pass_value="$(_aws secretsmanager get-secret-value --secret-id "${os_pass_secret_name}" --query SecretString --output text)"
 
 kubectl -n "${namespace}" create secret generic "${os_user_secret_name}" \
   --from-literal=username="${os_user_value}" \
@@ -108,7 +109,7 @@ kubectl -n "${namespace}" create secret generic "${os_pass_secret_name}" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
 if [ -n "${langfuse_secret_name}" ]; then
-  langfuse_secret_string="$(aws "${aws_args[@]}" secretsmanager get-secret-value --secret-id "${langfuse_secret_name}" --query SecretString --output text)"
+  langfuse_secret_string="$(_aws secretsmanager get-secret-value --secret-id "${langfuse_secret_name}" --query SecretString --output text)"
   langfuse_public_key="$(printf "%s" "${langfuse_secret_string}" | jq -r '.LANGFUSE_PUBLIC_KEY // empty')"
   langfuse_secret_key="$(printf "%s" "${langfuse_secret_string}" | jq -r '.LANGFUSE_SECRET_KEY // empty')"
   for ns in "${namespace}" "${HELM_OBSERVABILITY_NAMESPACE:-observability}"; do
