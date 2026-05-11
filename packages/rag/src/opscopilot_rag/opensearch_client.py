@@ -52,13 +52,17 @@ class OpenSearchClient:
         http_auth = None
         if self.config.username and self.config.password:
             http_auth = (self.config.username, self.config.password)
+        ssl_options: dict = {
+            "use_ssl": self.config.url.startswith("https"),
+            "verify_certs": self.config.verify_certs,
+        }
+        if not self.config.verify_certs:
+            ssl_options["ssl_assert_hostname"] = False
+            ssl_options["ssl_show_warn"] = False
         self.client = OpenSearch(
             hosts=[self.config.url],
             http_auth=http_auth,
-            use_ssl=self.config.url.startswith("https"),
-            verify_certs=self.config.verify_certs,
-            ssl_assert_hostname=self.config.verify_certs,
-            ssl_show_warn=self.config.verify_certs,
+            **ssl_options,
         )
 
     def ensure_index(self, dimensions: int) -> None:
