@@ -1,0 +1,29 @@
+{{- $host := coalesce .Values.langfuse.ingress.host .Values.terraform.helmValues.langfuse.domainName .Values.terraform.dnsContract.langfuse_domain_name "" -}}
+{{- if and .Values.langfuse.enabled .Values.langfuse.ingress.enabled $host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: langfuse
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-web
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.langfuse.ingress.className | quote }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.langfuse.ingress.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.langfuse.ingress.alb.targetType | quote }}
+    alb.ingress.kubernetes.io/listen-ports: {{ .Values.langfuse.ingress.alb.listenPortsJson | quote }}
+spec:
+  ingressClassName: {{ .Values.langfuse.ingress.className | quote }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.langfuse.ingress.path }}
+            pathType: {{ .Values.langfuse.ingress.pathType }}
+            backend:
+              service:
+                name: langfuse-web
+                port:
+                  number: 3000
+{{- end }}

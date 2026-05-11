@@ -95,3 +95,20 @@ metadata:
 data:
   config.alloy: |
 {{ .Files.Get "files/alloy/config.alloy" | indent 4 }}
+{{- if .Values.langfuse.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: langfuse-clickhouse-config
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-clickhouse
+data:
+  docker_related_config.xml: |
+    <clickhouse>
+      <listen_host>0.0.0.0</listen_host>
+      <listen_try>1</listen_try>
+    </clickhouse>
+{{- end }}

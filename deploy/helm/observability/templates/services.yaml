@@ -102,3 +102,91 @@ spec:
       port: {{ .Values.otelCollector.service.healthPort }}
       targetPort: health
 {{- end }}
+{{- if .Values.langfuse.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse-postgres
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-postgres
+spec:
+  selector:
+    app.kubernetes.io/component: langfuse-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse-clickhouse
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-clickhouse
+spec:
+  selector:
+    app.kubernetes.io/component: langfuse-clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+    - name: native
+      port: 9000
+      targetPort: native
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse-redis
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-redis
+spec:
+  selector:
+    app.kubernetes.io/component: langfuse-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse-minio
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-minio
+spec:
+  selector:
+    app.kubernetes.io/component: langfuse-minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: api
+    - name: console
+      port: 9001
+      targetPort: console
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse-web
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-web
+spec:
+  selector:
+    app.kubernetes.io/component: langfuse-web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+{{- end }}

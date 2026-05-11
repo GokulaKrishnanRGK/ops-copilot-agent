@@ -1,4 +1,4 @@
-.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-eval test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-eval install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest prompts-push eval-dataset-push eval-langfuse-run run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+.PHONY: build test lint format format-check check test-web test-api test-tool test-db test-llm test-tools test-rag test-agent test-eval test-agent-integration test-unit test-integration install install-web install-observability install-api install-tool install-llm install-rag install-agent install-eval install-db opensearch-up opensearch-down observability-up observability-down helm-app-values-generate eks-secrets-sync helm-app-up helm-app-down helm-observability-up helm-observability-down helm-observability-eks-up helm-observability-eks-down helm-controller-values-generate helm-externaldns-up helm-externaldns-down helm-awslbc-up helm-awslbc-down rag-ingest prompts-push eval-dataset-push eval-langfuse-run run-api run-tool-server run-local run-local-down run-local-helm run-local-helm-down smoke-local kind-up kind-down kind-kubeconfig kind-seed eks-kubeconfig ecr-login ecr-build-push docker-build-api docker-build-web docker-build-tool-server docker-build-images python-packages-build python-packages-publish tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
 
 IMAGE_TAG ?= dev
 API_IMAGE_REPOSITORY ?= ops-copilot/api
@@ -136,6 +136,13 @@ helm-observability-up:
 
 helm-observability-down:
 	helm uninstall $${HELM_OBSERVABILITY_RELEASE_NAME:-opscopilot-observability} -n $${HELM_LOCAL_NAMESPACE:-opscopilot-local} || true
+
+helm-observability-eks-up:
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" bash scripts/render-observability-values.sh
+	helm upgrade --install $${HELM_OBSERVABILITY_RELEASE_NAME:-opscopilot-observability} deploy/helm/observability -n $${HELM_OBSERVABILITY_NAMESPACE:-observability} --create-namespace -f $${HELM_OBSERVABILITY_VALUES_FILE:-deploy/helm/observability/values-eks.generated.yaml}
+
+helm-observability-eks-down:
+	helm uninstall $${HELM_OBSERVABILITY_RELEASE_NAME:-opscopilot-observability} -n $${HELM_OBSERVABILITY_NAMESPACE:-observability} || true
 
 helm-controller-values-generate:
 	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" HELM_AWSLBC_CLUSTER_NAME="$${HELM_AWSLBC_CLUSTER_NAME:-}" HELM_EXTERNALDNS_TXT_OWNER_ID="$${HELM_EXTERNALDNS_TXT_OWNER_ID:-}" bash scripts/render-controller-values.sh

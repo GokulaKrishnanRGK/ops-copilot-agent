@@ -273,3 +273,400 @@ spec:
           hostPath:
             path: /var/log
 {{- end }}
+{{- if .Values.langfuse.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-postgres
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: langfuse-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: langfuse-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.langfuse.postgresImage | quote }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.langfuse.postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.langfuse.postgres.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.langfuse.postgres.db | quote }}
+            - name: TZ
+              value: "UTC"
+            - name: PGTZ
+              value: "UTC"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-clickhouse
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-clickhouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: langfuse-clickhouse
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: langfuse-clickhouse
+    spec:
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+      containers:
+        - name: clickhouse
+          image: {{ .Values.langfuse.clickhouseImage | quote }}
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          env:
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.langfuse.clickhouse.db | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.langfuse.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.langfuse.clickhouse.password | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: logs
+              mountPath: /var/log/clickhouse-server
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/docker_related_config.xml
+              subPath: docker_related_config.xml
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: langfuse-clickhouse-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-redis
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: langfuse-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: langfuse-redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.langfuse.redisImage | quote }}
+          command: ["redis-server", "--requirepass", {{ .Values.langfuse.redis.password | quote }}, "--maxmemory-policy", "noeviction"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-minio
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: langfuse-minio
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: langfuse-minio
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.langfuse.minioImage | quote }}
+          command: ["sh", "-c", "mkdir -p /data/{{ .Values.langfuse.minio.bucket }} && minio server --address \":9000\" --console-address \":9001\" /data"]
+          ports:
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+{{- $dbUrl := printf "postgresql://%s:%s@langfuse-postgres:5432/%s" .Values.langfuse.postgres.user .Values.langfuse.postgres.password .Values.langfuse.postgres.db }}
+{{- $chMigrationUrl := printf "clickhouse://langfuse-clickhouse:9000" }}
+{{- $chUrl := "http://langfuse-clickhouse:8123" }}
+{{- $s3Endpoint := "http://langfuse-minio:9000" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-worker
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: langfuse-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: langfuse-worker
+    spec:
+      containers:
+        - name: worker
+          image: {{ .Values.langfuse.workerImage | quote }}
+          env:
+            - name: NEXTAUTH_URL
+              value: {{ .Values.langfuse.app.nextauthUrl | quote }}
+            - name: DATABASE_URL
+              value: {{ $dbUrl | quote }}
+            - name: SALT
+              value: {{ .Values.langfuse.app.salt | quote }}
+            - name: ENCRYPTION_KEY
+              value: {{ .Values.langfuse.app.encryptionKey | quote }}
+            - name: TELEMETRY_ENABLED
+              value: "false"
+            - name: CLICKHOUSE_MIGRATION_URL
+              value: {{ $chMigrationUrl | quote }}
+            - name: CLICKHOUSE_URL
+              value: {{ $chUrl | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.langfuse.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.langfuse.clickhouse.password | quote }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.langfuse.clickhouse.db | quote }}
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: "false"
+            - name: REDIS_HOST
+              value: "langfuse-redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_AUTH
+              value: {{ .Values.langfuse.redis.password | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
+              value: {{ .Values.langfuse.minio.bucket | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
+              value: "auto"
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
+              value: {{ $s3Endpoint | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_EVENT_UPLOAD_PREFIX
+              value: "events/"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_BUCKET
+              value: {{ .Values.langfuse.minio.bucket | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_REGION
+              value: "auto"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT
+              value: {{ $s3Endpoint | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_PREFIX
+              value: "media/"
+            - name: LANGFUSE_S3_BATCH_EXPORT_ENABLED
+              value: "false"
+            - name: LANGFUSE_S3_BATCH_EXPORT_BUCKET
+              value: {{ .Values.langfuse.minio.bucket | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_REGION
+              value: "auto"
+            - name: LANGFUSE_S3_BATCH_EXPORT_ENDPOINT
+              value: {{ $s3Endpoint | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE
+              value: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse-web
+  namespace: {{ include "opscopilot-observability.namespace" . }}
+  labels:
+    {{- include "opscopilot-observability.labels" . | nindent 4 }}
+    app.kubernetes.io/component: langfuse-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: langfuse-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: langfuse-web
+    spec:
+      containers:
+        - name: web
+          image: {{ .Values.langfuse.webImage | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: NEXTAUTH_URL
+              value: {{ .Values.langfuse.app.nextauthUrl | quote }}
+            - name: NEXTAUTH_SECRET
+              value: {{ .Values.langfuse.app.nextauthSecret | quote }}
+            - name: DATABASE_URL
+              value: {{ $dbUrl | quote }}
+            - name: SALT
+              value: {{ .Values.langfuse.app.salt | quote }}
+            - name: ENCRYPTION_KEY
+              value: {{ .Values.langfuse.app.encryptionKey | quote }}
+            - name: TELEMETRY_ENABLED
+              value: "false"
+            - name: CLICKHOUSE_MIGRATION_URL
+              value: {{ $chMigrationUrl | quote }}
+            - name: CLICKHOUSE_URL
+              value: {{ $chUrl | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.langfuse.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.langfuse.clickhouse.password | quote }}
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.langfuse.clickhouse.db | quote }}
+            - name: CLICKHOUSE_CLUSTER_ENABLED
+              value: "false"
+            - name: REDIS_HOST
+              value: "langfuse-redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_AUTH
+              value: {{ .Values.langfuse.redis.password | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_BUCKET
+              value: {{ .Values.langfuse.minio.bucket | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
+              value: "auto"
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
+              value: {{ $s3Endpoint | quote }}
+            - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_EVENT_UPLOAD_PREFIX
+              value: "events/"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_BUCKET
+              value: {{ .Values.langfuse.minio.bucket | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_REGION
+              value: "auto"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT
+              value: {{ $s3Endpoint | quote }}
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_S3_MEDIA_UPLOAD_PREFIX
+              value: "media/"
+            - name: LANGFUSE_S3_BATCH_EXPORT_ENABLED
+              value: "false"
+            - name: LANGFUSE_S3_BATCH_EXPORT_BUCKET
+              value: {{ .Values.langfuse.minio.bucket | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_REGION
+              value: "auto"
+            - name: LANGFUSE_S3_BATCH_EXPORT_ENDPOINT
+              value: {{ $s3Endpoint | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID
+              value: {{ .Values.langfuse.minio.rootUser | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY
+              value: {{ .Values.langfuse.minio.rootPassword | quote }}
+            - name: LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE
+              value: "true"
+            - name: LANGFUSE_INIT_ORG_ID
+              value: {{ .Values.langfuse.app.initOrgId | quote }}
+            - name: LANGFUSE_INIT_ORG_NAME
+              value: {{ .Values.langfuse.app.initOrgName | quote }}
+            - name: LANGFUSE_INIT_PROJECT_ID
+              value: {{ .Values.langfuse.app.initProjectId | quote }}
+            - name: LANGFUSE_INIT_PROJECT_NAME
+              value: {{ .Values.langfuse.app.initProjectName | quote }}
+            {{- if .Values.langfuse.secretRefs.publicKeySecret }}
+            - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.langfuse.secretRefs.publicKeySecret | quote }}
+                  key: {{ .Values.langfuse.secretRefs.publicKeySecretKey | quote }}
+            {{- else }}
+            - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+              value: {{ .Values.langfuse.app.initProjectPublicKey | quote }}
+            {{- end }}
+            {{- if .Values.langfuse.secretRefs.secretKeySecret }}
+            - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.langfuse.secretRefs.secretKeySecret | quote }}
+                  key: {{ .Values.langfuse.secretRefs.secretKeySecretKey | quote }}
+            {{- else }}
+            - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+              value: {{ .Values.langfuse.app.initProjectSecretKey | quote }}
+            {{- end }}
+            - name: LANGFUSE_INIT_USER_EMAIL
+              value: {{ .Values.langfuse.app.initUserEmail | quote }}
+            - name: LANGFUSE_INIT_USER_NAME
+              value: {{ .Values.langfuse.app.initUserName | quote }}
+            - name: LANGFUSE_INIT_USER_PASSWORD
+              value: {{ .Values.langfuse.app.initUserPassword | quote }}
+{{- end }}

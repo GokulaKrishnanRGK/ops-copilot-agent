@@ -200,6 +200,9 @@ fi
   echo "    LLM_MODEL_ID: \"${llm_model_id}\""
   echo "    BEDROCK_EMBEDDING_MODEL_ID: \"${bedrock_embedding_model_id}\""
   echo "    BEDROCK_REGION: \"${bedrock_region}\""
+  if [ -n "${langfuse_domain}" ] && [ "${langfuse_domain}" != "null" ]; then
+    echo "    LANGFUSE_HOST: \"https://${langfuse_domain}\""
+  fi
 } >"${app_values_out}"
 
 echo "generated ${app_values_out}"

@@ -72,11 +72,66 @@ otelCollector:
     prometheusPort: 8889
     healthPort: 13133
 
+langfuse:
+  enabled: true
+  postgresImage: "postgres:16-alpine"
+  clickhouseImage: "clickhouse/clickhouse-server:24.3-alpine"
+  redisImage: "redis:7-alpine"
+  minioImage: "cgr.dev/chainguard/minio"
+  workerImage: "langfuse/langfuse-worker:3.173.0"
+  webImage: "langfuse/langfuse:3.173.0"
+  postgres:
+    user: "postgres"
+    password: "postgres"
+    db: "langfuse"
+  clickhouse:
+    user: "clickhouse"
+    password: "clickhouse"
+    db: "default"
+  redis:
+    password: "langfuse-redis"
+  minio:
+    rootUser: "minio"
+    rootPassword: "miniosecret"
+    bucket: "langfuse"
+  app:
+    nextauthUrl: ""
+    nextauthSecret: "opscopilot-langfuse-secret"
+    salt: "opscopilot-langfuse-salt"
+    encryptionKey: "0000000000000000000000000000000000000000000000000000000000000000"
+    initOrgId: "opscopilot"
+    initOrgName: "OpsCopilot"
+    initProjectId: "opscopilot-demo"
+    initProjectName: "OpsCopilot Demo"
+    initProjectPublicKey: ""
+    initProjectSecretKey: ""
+    initUserEmail: "admin@example.com"
+    initUserName: "OpsCopilot Admin"
+    initUserPassword: "opscopilot-admin"
+  ingress:
+    enabled: true
+    className: "alb"
+    host: ""
+    path: "/"
+    pathType: Prefix
+    alb:
+      scheme: "internet-facing"
+      targetType: "ip"
+      listenPortsJson: '[{"HTTP":80}]'
+  secretRefs:
+    publicKeySecret: ""
+    publicKeySecretKey: "LANGFUSE_PUBLIC_KEY"
+    secretKeySecret: ""
+    secretKeySecretKey: "LANGFUSE_SECRET_KEY"
+
 terraform:
   outputContractVersion: ""
   helmValues:
     observability:
       grafana:
         domainName: ""
+    langfuse:
+      domainName: ""
   dnsContract:
     observability_domain_name: ""
+    langfuse_domain_name: ""

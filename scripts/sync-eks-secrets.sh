@@ -50,6 +50,7 @@ db_secret_name="$(json_get '.helm_secret_refs.value.api.database.secretName')"
 db_secret_arn="$(json_get '.helm_secret_refs.value.api.database.secretArn')"
 os_user_secret_name="$(json_get '.helm_secret_refs.value.api.opensearch.usernameSecretName')"
 os_pass_secret_name="$(json_get '.helm_secret_refs.value.api.opensearch.passwordSecretName')"
+langfuse_secret_name="$(json_get '.helm_secret_refs.value.api.langfuse.secretName')"
 
 if [ -z "${db_secret_name}" ] || [ -z "${os_user_secret_name}" ] || [ -z "${os_pass_secret_name}" ]; then
   echo "missing required Terraform secret reference outputs" >&2
@@ -106,7 +107,23 @@ kubectl -n "${namespace}" create secret generic "${os_pass_secret_name}" \
   --from-literal=password="${os_pass_value}" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
+if [ -n "${langfuse_secret_name}" ]; then
+  langfuse_secret_string="$(aws "${aws_args[@]}" secretsmanager get-secret-value --secret-id "${langfuse_secret_name}" --query SecretString --output text)"
+  langfuse_public_key="$(printf "%s" "${langfuse_secret_string}" | jq -r '.LANGFUSE_PUBLIC_KEY // empty')"
+  langfuse_secret_key="$(printf "%s" "${langfuse_secret_string}" | jq -r '.LANGFUSE_SECRET_KEY // empty')"
+  for ns in "${namespace}" "${HELM_OBSERVABILITY_NAMESPACE:-observability}"; do
+    kubectl get namespace "${ns}" >/dev/null 2>&1 || continue
+    kubectl -n "${ns}" create secret generic "${langfuse_secret_name}" \
+      --from-literal=LANGFUSE_PUBLIC_KEY="${langfuse_public_key}" \
+      --from-literal=LANGFUSE_SECRET_KEY="${langfuse_secret_key}" \
+      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  done
+fi
+
 echo "synced Kubernetes secrets in namespace=${namespace}"
 echo "- ${db_secret_name} (DATABASE_URL)"
 echo "- ${os_user_secret_name} (username)"
 echo "- ${os_pass_secret_name} (password)"
+if [ -n "${langfuse_secret_name}" ]; then
+  echo "- ${langfuse_secret_name} (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY)"
+fi

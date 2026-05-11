@@ -6,7 +6,7 @@ on:
       image_tag:
         description: "Image tag to publish"
         required: false
-        default: ""
+        default: "dev"
 
 permissions:
   contents: read
@@ -36,6 +36,7 @@ jobs:
           else
             echo "value=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
           fi
+          echo "dev_tag=dev" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -63,7 +64,9 @@ jobs:
           context: .
           file: apps/api/Dockerfile
           push: true
-          tags: ${{ env.ECR_REPO_API }}:${{ steps.tag.outputs.value }}
+          tags: |
+            ${{ env.ECR_REPO_API }}:${{ steps.tag.outputs.value }}
+            ${{ env.ECR_REPO_API }}:${{ steps.tag.outputs.dev_tag }}
 
       - name: Build and push Web image
         uses: docker/build-push-action@v6
@@ -71,7 +74,9 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           push: true
-          tags: ${{ env.ECR_REPO_WEB }}:${{ steps.tag.outputs.value }}
+          tags: |
+            ${{ env.ECR_REPO_WEB }}:${{ steps.tag.outputs.value }}
+            ${{ env.ECR_REPO_WEB }}:${{ steps.tag.outputs.dev_tag }}
 
       - name: Build and push Tool Server image
         uses: docker/build-push-action@v6
@@ -79,7 +84,9 @@ jobs:
           context: apps/tool-server
           file: apps/tool-server/Dockerfile
           push: true
-          tags: ${{ env.ECR_REPO_TOOL_SERVER }}:${{ steps.tag.outputs.value }}
+          tags: |
+            ${{ env.ECR_REPO_TOOL_SERVER }}:${{ steps.tag.outputs.value }}
+            ${{ env.ECR_REPO_TOOL_SERVER }}:${{ steps.tag.outputs.dev_tag }}
 
       - name: Summary
         shell: bash

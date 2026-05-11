@@ -43,6 +43,7 @@ COPY packages/db/alembic /app/migrations/alembic
 COPY packages/db/alembic.ini /app/migrations/alembic.ini
 COPY prompts /app/prompts
 COPY packages/eval/datasets /app/datasets
+COPY packages/rag/sample_docs /app/packages/rag/sample_docs
 COPY apps/api/entrypoint.sh /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh
