@@ -8,7 +8,7 @@ images:
   apiRepository: "ops-copilot/api"
   webRepository: "ops-copilot/web"
   toolServerRepository: "ops-copilot/tool-server"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 api:
   enabled: true
