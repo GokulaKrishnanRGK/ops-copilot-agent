@@ -170,6 +170,29 @@ migrations:
     secretName: ""
     secretKey: "DATABASE_URL"
 
+ragIngest:
+  enabled: true
+  hook:
+    enabled: true
+    deletePolicy: "before-hook-creation,hook-succeeded"
+    weight: "0"
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 300
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+  docsRoot: "/app/packages/rag/sample_docs"
+  docsExtensions: ".md,.txt"
+  env: {}
+  opensearch:
+    useTerraformSecrets: true
+    urlSecretName: ""
+    usernameSecretName: ""
+    passwordSecretName: ""
+    verifyCerts: "true"
+
 terraform:
   outputContractVersion: ""
   helmValues:

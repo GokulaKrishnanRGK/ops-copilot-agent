@@ -1,0 +1,101 @@
+{{- if .Values.ragIngest.enabled }}
+{{- $apiImageRepo := coalesce .Values.ragIngest.image.repository .Values.terraform.helmValues.images.apiRepository .Values.images.apiRepository -}}
+{{- $imageTag := coalesce .Values.ragIngest.image.tag .Values.global.imageTag -}}
+{{- $imagePullPolicy := coalesce .Values.ragIngest.image.pullPolicy .Values.images.pullPolicy -}}
+{{- $awsRegion := coalesce .Values.terraform.helmValues.global.awsRegion .Values.global.awsRegion -}}
+{{- $ecrPullSecret := .Values.artifacts.ecr.imagePullSecretName -}}
+{{- $osUrl := coalesce .Values.terraform.helmValues.api.env.opensearchUrl "" -}}
+{{- $osIndex := coalesce .Values.terraform.helmValues.api.env.opensearchIndex "" -}}
+{{- $osUserSecret := "" -}}
+{{- $osPassSecret := "" -}}
+{{- if and .Values.ragIngest.opensearch.useTerraformSecrets .Values.terraform.helmSecretRefs.api.opensearch.usernameSecretName }}
+{{- $osUserSecret = .Values.terraform.helmSecretRefs.api.opensearch.usernameSecretName -}}
+{{- else if .Values.ragIngest.opensearch.usernameSecretName }}
+{{- $osUserSecret = .Values.ragIngest.opensearch.usernameSecretName -}}
+{{- end }}
+{{- if and .Values.ragIngest.opensearch.useTerraformSecrets .Values.terraform.helmSecretRefs.api.opensearch.passwordSecretName }}
+{{- $osPassSecret = .Values.terraform.helmSecretRefs.api.opensearch.passwordSecretName -}}
+{{- else if .Values.ragIngest.opensearch.passwordSecretName }}
+{{- $osPassSecret = .Values.ragIngest.opensearch.passwordSecretName -}}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "opscopilot.fullname" . }}-rag-ingest
+  namespace: {{ include "opscopilot.namespace" . }}
+  labels:
+    {{- include "opscopilot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rag-ingest
+  {{- if .Values.ragIngest.hook.enabled }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": {{ .Values.ragIngest.hook.deletePolicy | quote }}
+    "helm.sh/hook-weight": {{ .Values.ragIngest.hook.weight | quote }}
+  {{- end }}
+spec:
+  backoffLimit: {{ .Values.ragIngest.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.ragIngest.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.ragIngest.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "opscopilot.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: rag-ingest
+    spec:
+      serviceAccountName: {{ include "opscopilot.apiServiceAccountName" . }}
+      restartPolicy: OnFailure
+      {{- if or .Values.imagePullSecrets $ecrPullSecret }}
+      imagePullSecrets:
+        {{- with .Values.imagePullSecrets }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ecrPullSecret }}
+        - name: {{ $ecrPullSecret | quote }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: rag-ingest
+          image: "{{ $apiImageRepo }}:{{ $imageTag }}"
+          imagePullPolicy: {{ $imagePullPolicy }}
+          command:
+            - opscopilot-rag-ingest
+            - --root
+            - {{ .Values.ragIngest.docsRoot | quote }}
+            - --extensions
+            - {{ .Values.ragIngest.docsExtensions | quote }}
+          env:
+            - name: AWS_REGION
+              value: {{ $awsRegion | quote }}
+            - name: BEDROCK_REGION
+              value: {{ $awsRegion | quote }}
+            - name: BEDROCK_EMBEDDING_MODEL_ID
+              value: {{ .Values.api.env.BEDROCK_EMBEDDING_MODEL_ID | default "" | quote }}
+            {{- if $osUrl }}
+            - name: OPENSEARCH_URL
+              value: {{ $osUrl | quote }}
+            {{- end }}
+            {{- if $osIndex }}
+            - name: OPENSEARCH_INDEX
+              value: {{ $osIndex | quote }}
+            {{- end }}
+            {{- if $osUserSecret }}
+            - name: OPENSEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $osUserSecret | quote }}
+                  key: {{ .Values.api.secrets.opensearchUsernameKey | quote }}
+            {{- end }}
+            {{- if $osPassSecret }}
+            - name: OPENSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $osPassSecret | quote }}
+                  key: {{ .Values.api.secrets.opensearchPasswordKey | quote }}
+            {{- end }}
+            - name: OPENSEARCH_VERIFY_CERTS
+              value: {{ .Values.ragIngest.opensearch.verifyCerts | quote }}
+            {{- range $key, $value := .Values.ragIngest.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+{{- end }}
