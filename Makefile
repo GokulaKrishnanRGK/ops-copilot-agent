@@ -15,6 +15,8 @@ TF_ENV ?= dev
 TF_VARS_FILE ?= deploy/terraform/environments/$(TF_ENV).tfvars
 TF_STATE_KEY ?= ops-copilot/$(TF_ENV)/terraform.tfstate
 TF_AUTO_APPROVE ?= 0
+LLM_MODEL_ID ?= global.amazon.nova-2-lite-v1:0
+BEDROCK_EMBEDDING_MODEL_ID ?= amazon.titan-embed-text-v1
 
 build:
 	cd apps/web && npm run build
@@ -118,7 +120,7 @@ observability-down:
 	docker compose --env-file .env -f deploy/compose/observability.yml down
 
 helm-app-values-generate:
-	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" IMAGE_TAG="$(IMAGE_TAG)" LOG_LEVEL="$${LOG_LEVEL:-INFO}" K8S_ALLOWED_NAMESPACES="$${K8S_ALLOWED_NAMESPACES:-default}" HELM_APP_VALUES_OUT="$${HELM_APP_VALUES_OUT:-}" OTEL_EXPORTER_OTLP_ENDPOINT="" bash scripts/render-app-values.sh
+	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" IMAGE_TAG="$(IMAGE_TAG)" LLM_MODEL_ID="$(LLM_MODEL_ID)" BEDROCK_EMBEDDING_MODEL_ID="$(BEDROCK_EMBEDDING_MODEL_ID)" LOG_LEVEL="$${LOG_LEVEL:-INFO}" K8S_ALLOWED_NAMESPACES="$${K8S_ALLOWED_NAMESPACES:-default}" HELM_APP_VALUES_OUT="$${HELM_APP_VALUES_OUT:-}" OTEL_EXPORTER_OTLP_ENDPOINT="" bash scripts/render-app-values.sh
 
 eks-secrets-sync:
 	TF_ENV="$(TF_ENV)" TF_VARS_FILE="$(TF_VARS_FILE)" TF_STATE_KEY="$(TF_STATE_KEY)" HELM_APP_NAMESPACE="$${HELM_APP_NAMESPACE:-opscopilot}" AWS_REGION="$${AWS_REGION:-}" AWS_PROFILE="$${AWS_PROFILE:-}" bash scripts/sync-eks-secrets.sh
